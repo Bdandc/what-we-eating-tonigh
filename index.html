@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dinner Time</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-card">
+          <p class="hero-card-label">Tonight's vibe</p>
+          <h2 id="today-title">Loading dinner...</h2>
+          <p id="today-description" class="hero-card-text">
+            Checking the plan for today.
+          </p>
+        </div>
+      </header>
+
+      <main>
+        <section class="planner-header">
+          <div>
+            <p class="section-label">Weekly planner</p>
+            <h2>What we are eating this week</h2>
+          </div>
+          <button id="reset-button" class="secondary-button" type="button">
+            Reset all shuffles
+          </button>
+        </section>
+
+        <section id="meal-grid" class="meal-grid" aria-label="Weekly dinner planner"></section>
+      </main>
+    </div>
+
+    <div id="drawer-overlay" class="drawer-overlay" hidden></div>
+    <aside
+      id="library-drawer"
+      class="library-drawer"
+      aria-hidden="true"
+      aria-labelledby="library-title"
+    >
+      <div class="drawer-header">
+        <div>
+          <p class="section-label">Meal library</p>
+          <h2 id="library-title">Favorite meals we already love</h2>
+        </div>
+        <button id="close-drawer-button" class="drawer-close-button" type="button" aria-label="Close meal library">
+          ×
+        </button>
+      </div>
+
+      <form id="favorite-form" class="favorite-form">
+        <p class="library-label">Add a favorite</p>
+        <label class="field">
+          <span>Meal type</span>
+          <select id="meal-type" name="mealType">
+            <option value="family">Family favorite</option>
+            <option value="kids">Kids favorite</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Meal name</span>
+          <input id="meal-name-input" name="mealName" type="text" placeholder="Pizza wraps" required />
+        </label>
+        <label class="field">
+          <span>Short description</span>
+          <textarea
+            id="meal-description-input"
+            name="mealDescription"
+            rows="3"
+            placeholder="Quick, easy, and always gets eaten."
+            required
+          ></textarea>
+        </label>
+        <button class="primary-button" type="submit">Add to favorites</button>
+      </form>
+
+      <div class="drawer-library">
+        <div class="library-column">
+          <p class="library-label">Family favorites</p>
+          <div id="family-library" class="library-list"></div>
+        </div>
+        <div class="library-column">
+          <p class="library-label">Kids favorites</p>
+          <div id="kids-library" class="library-list"></div>
+        </div>
+      </div>
+    </aside>
+
+    <nav class="bottom-nav" aria-label="Bottom navigation">
+      <button id="open-drawer-button" class="bottom-nav-button" type="button">
+        <span class="bottom-nav-icon">≡</span>
+        <span>Meals</span>
+      </button>
+    </nav>
+
+    <template id="day-card-template">
+      <article class="day-card">
+        <div class="day-card-top">
+          <div>
+            <p class="day-name"></p>
+          </div>
+        </div>
+
+        <div class="meal-stack">
+          <div class="meal-panel">
+            <div class="meal-panel-top">
+              <div>
+                <p class="meal-kicker">Family dinner</p>
+                <h3 class="meal-name"></h3>
+              </div>
+              <div class="meal-panel-actions">
+                <span class="meal-count family-count"></span>
+                <button
+                  class="shuffle-icon-button family-shuffle-button"
+                  type="button"
+                  aria-label="Shuffle family meal"
+                  title="Shuffle family meal"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M17 3h4v4"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                    <path
+                      d="M3 7h5l4 5 4 5h5"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                    <path
+                      d="M17 17h4v4"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                    <path
+                      d="M3 17h5l2-2"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                    <path
+                      d="M14 10l2-2h5"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <p class="meal-description"></p>
+          </div>
+
+          <div class="meal-panel kids-panel">
+            <div class="meal-panel-top">
+              <div>
+                <p class="meal-kicker">Kids dinner</p>
+                <h3 class="kids-meal-name"></h3>
+              </div>
+              <div class="meal-panel-actions">
+                <label class="toggle-control" aria-label="Use a separate kids meal">
+                  <input class="kids-toggle-input" type="checkbox" />
+                  <span class="toggle-slider"></span>
+                </label>
+                <span class="meal-count kids-count"></span>
+                <button
+                  class="shuffle-icon-button kids-shuffle-button"
+                  type="button"
+                  aria-label="Shuffle kids meal"
+                  title="Shuffle kids meal"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M17 3h4v4"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                    <path
+                      d="M3 7h5l4 5 4 5h5"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                    <path
+                      d="M17 17h4v4"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                    <path
+                      d="M3 17h5l2-2"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                    <path
+                      d="M14 10l2-2h5"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <p class="kids-meal-description"></p>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <template id="library-item-template">
+      <article class="library-item">
+        <h3 class="library-item-name"></h3>
+        <p class="library-item-description"></p>
+      </article>
+    </template>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
