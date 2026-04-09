@@ -663,7 +663,7 @@ export function DinnerPlanner() {
           <button
             type="button"
             onClick={resetShuffles}
-            className="inline-flex h-11 items-center justify-center rounded-full bg-white/80 px-5 text-sm font-semibold text-foreground shadow-[0_10px_24px_rgba(84,55,31,0.08)] transition hover:-translate-y-0.5"
+            className="inline-flex h-11 items-center justify-center rounded-full bg-white/80 px-5 text-sm font-semibold text-foreground shadow-[0_10px_24px_rgba(84,55,31,0.08)] transition motion-safe:hover:-translate-y-0.5"
           >
             Reset all shuffles
           </button>
@@ -710,7 +710,7 @@ export function DinnerPlanner() {
                             "inline-flex h-11 w-11 items-center justify-center rounded-full shadow-[0_10px_18px_rgba(143,52,27,0.12)] transition",
                             familyDisabled
                               ? "cursor-not-allowed bg-[rgba(119,98,76,0.14)] text-[rgba(119,98,76,0.62)]"
-                              : "bg-[rgba(200,92,61,0.12)] text-accent-deep hover:-translate-y-0.5",
+                              : "bg-[rgba(200,92,61,0.12)] text-accent-deep motion-safe:hover:-translate-y-0.5",
                           )}
                           aria-label={familyDisabled ? "No family shuffles left" : "Shuffle family meal"}
                         >
@@ -772,7 +772,7 @@ export function DinnerPlanner() {
                                 "inline-flex h-11 w-11 items-center justify-center rounded-full transition",
                                 kidsDisabled
                                   ? "cursor-not-allowed bg-[rgba(119,98,76,0.14)] text-[rgba(119,98,76,0.62)]"
-                                  : "bg-[rgba(126,159,104,0.14)] text-[#49603e] shadow-[0_10px_18px_rgba(73,96,62,0.14)] hover:-translate-y-0.5",
+                                  : "bg-[rgba(126,159,104,0.14)] text-[#49603e] shadow-[0_10px_18px_rgba(73,96,62,0.14)] motion-safe:hover:-translate-y-0.5",
                               )}
                               aria-label={kidsDisabled ? "No kids shuffles left" : "Shuffle kids meal"}
                             >
@@ -817,7 +817,7 @@ export function DinnerPlanner() {
           <button
             type="button"
             onClick={() => setDrawerOpen(false)}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/80 text-xl shadow-[0_10px_24px_rgba(84,55,31,0.08)] transition hover:-translate-y-0.5"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/80 text-xl shadow-[0_10px_24px_rgba(84,55,31,0.08)] transition motion-safe:hover:-translate-y-0.5"
             aria-label="Close meal library"
           >
             ×
@@ -894,7 +894,7 @@ export function DinnerPlanner() {
               <button
                 type="button"
                 onClick={saveMeal}
-                className="inline-flex h-12 items-center justify-center rounded-2xl bg-accent px-5 text-sm font-semibold text-[#fff8f3] shadow-[0_14px_24px_rgba(143,52,27,0.2)] transition hover:-translate-y-0.5"
+                className="inline-flex h-12 items-center justify-center rounded-2xl bg-accent px-5 text-sm font-semibold text-[#fff8f3] shadow-[0_14px_24px_rgba(143,52,27,0.2)] transition motion-safe:hover:-translate-y-0.5"
               >
                 {editingMealId ? "Save changes" : "Add to favorites"}
               </button>
@@ -940,7 +940,7 @@ export function DinnerPlanner() {
               <button
                 type="button"
                 onClick={addFamilyMember}
-                className="inline-flex h-12 items-center justify-center rounded-2xl bg-[#2f2419] px-5 text-sm font-semibold text-[#fff8f3] transition hover:-translate-y-0.5"
+                className="inline-flex h-12 items-center justify-center rounded-2xl bg-[#2f2419] px-5 text-sm font-semibold text-[#fff8f3] transition motion-safe:hover:-translate-y-0.5"
               >
                 Add family member
               </button>
@@ -1013,7 +1013,7 @@ export function DinnerPlanner() {
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}
-          className="inline-flex items-center gap-3 rounded-full bg-[#2f2419] px-5 py-3 text-sm font-semibold text-[#fff8f3] shadow-[0_18px_32px_rgba(47,36,25,0.22)] transition hover:-translate-y-0.5"
+          className="inline-flex items-center gap-3 rounded-full bg-[#2f2419] px-5 py-3 text-sm font-semibold text-[#fff8f3] shadow-[0_18px_32px_rgba(47,36,25,0.22)] transition motion-safe:hover:-translate-y-0.5"
         >
           <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/15">≡</span>
           Meals
