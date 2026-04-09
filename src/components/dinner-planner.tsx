@@ -686,7 +686,7 @@ export function DinnerPlanner() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="mb-3 text-xs font-bold uppercase tracking-[0.24em] text-accent-deep">Family dinner</p>
-                        <h3 className="font-display text-4xl leading-none tracking-tight">{familyMeal?.name ?? "Choose dinner"}</h3>
+                        <h3 className="font-display text-3xl leading-none tracking-tight sm:text-4xl">{familyMeal?.name ?? "Choose dinner"}</h3>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         <span className="inline-flex min-w-18 items-center justify-center rounded-full bg-[rgba(200,92,61,0.12)] px-3 py-2 text-sm font-bold text-accent-deep">
