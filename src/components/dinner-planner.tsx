@@ -678,121 +678,121 @@ export function DinnerPlanner() {
             const kidsDisabled = !state.useKidsMeal || state.kidsShufflesUsed >= maxShuffles;
 
             return (
-              <article key={dayPlan.day} className={cn(appSurface(), "flex flex-col gap-4 rounded-[24px] p-5", dayPlan.day === todayName && "outline-2 outline-offset-0 outline-[rgba(200,92,61,0.28)]")}>
+              <article key={dayPlan.day} className={cn(appSurface(), "flex flex-col gap-5 rounded-[24px] p-6", dayPlan.day === todayName && "outline-2 outline-offset-0 outline-[rgba(200,92,61,0.28)]")}>
+
+                {/* Counter + shuffle — top right */}
+                <div className="flex items-center justify-end gap-2">
+                  <span className="inline-flex items-center justify-center rounded-full bg-[rgba(200,92,61,0.10)] px-3 py-1.5 text-sm font-bold text-accent-deep">
+                    {state.familyShufflesUsed}/{maxShuffles}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={familyDisabled}
+                    onClick={() =>
+                      updateDay(dayPlan.day, (current) => ({
+                        ...current,
+                        familyMealId: getRandomMealId(
+                          [...dayPlan.familyMealIds, ...appState.customMeals.family.map((meal) => meal.id)],
+                          current.familyMealId,
+                          appState.mealLikes,
+                        ),
+                        familyShufflesUsed: current.familyShufflesUsed + 1,
+                      }))
+                    }
+                    className={cn(
+                      "inline-flex h-9 w-9 items-center justify-center rounded-full transition",
+                      familyDisabled
+                        ? "cursor-not-allowed bg-[rgba(119,98,76,0.12)] text-[rgba(119,98,76,0.4)]"
+                        : "bg-[rgba(200,92,61,0.10)] text-accent-deep motion-safe:hover:-translate-y-0.5",
+                    )}
+                    aria-label={familyDisabled ? "No family shuffles left" : "Shuffle family meal"}
+                  >
+                    {shuffleIcon}
+                  </button>
+                </div>
+
+                {/* Day name */}
                 <p className="font-display text-3xl leading-none">{dayPlan.day}</p>
 
-                <div className="grid gap-3">
-                  <section className="rounded-[22px] bg-surface-strong p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="mb-3 text-xs font-bold uppercase tracking-[0.24em] text-accent-deep">Family dinner</p>
-                        <h3 className="font-display text-3xl leading-none tracking-tight sm:text-4xl">{familyMeal?.name ?? "Choose dinner"}</h3>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <span className="inline-flex min-w-18 items-center justify-center rounded-full bg-[rgba(200,92,61,0.12)] px-3 py-2 text-sm font-bold text-accent-deep">
-                          {state.familyShufflesUsed}/{maxShuffles}
+                {/* Family dinner */}
+                <div>
+                  <p className="mb-2 text-xs font-bold uppercase tracking-[0.24em] text-accent-deep">Family dinner</p>
+                  <h3 className="font-display text-3xl leading-none tracking-tight sm:text-4xl">{familyMeal?.name ?? "Choose dinner"}</h3>
+                  <p className="mt-3 text-sm leading-6 text-muted">{familyMeal?.description}</p>
+                  {familyMeal && getMealMembers(familyMeal.id).length > 0 && (
+                    <div className="mt-4 flex -space-x-2.5">
+                      {getMealMembers(familyMeal.id).map((member) => (
+                        <div
+                          key={member.id}
+                          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-white text-sm font-bold text-white shadow-sm"
+                          style={{ backgroundColor: member.color }}
+                          title={member.name}
+                        >
+                          {member.name[0]}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Kids dinner */}
+                <div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold uppercase tracking-[0.24em] text-accent-deep">Kids dinner</p>
+                    <label className="relative inline-flex h-7 w-12 cursor-pointer items-center">
+                      <input
+                        type="checkbox"
+                        checked={state.useKidsMeal}
+                        onChange={(event) =>
+                          updateDay(dayPlan.day, (current) => ({
+                            ...current,
+                            useKidsMeal: event.target.checked,
+                          }))
+                        }
+                        className="peer sr-only"
+                      />
+                      <span className="h-7 w-12 rounded-full bg-[rgba(119,98,76,0.2)] transition peer-checked:bg-accent" />
+                      <span className="absolute left-1 top-1 h-5 w-5 rounded-full bg-[#fffaf4] shadow-[0_4px_10px_rgba(47,36,25,0.16)] transition peer-checked:translate-x-5" />
+                    </label>
+                  </div>
+
+                  {state.useKidsMeal && (
+                    <div className="mt-4">
+                      <h3 className="font-display text-2xl leading-none tracking-tight sm:text-3xl">
+                        {kidsMeal?.name ?? "Choose kids meal"}
+                      </h3>
+                      <p className="mt-2 text-sm leading-6 text-muted">{kidsMeal?.description}</p>
+                      <div className="mt-4 flex items-center gap-2">
+                        <span className="inline-flex items-center justify-center rounded-full bg-[rgba(200,92,61,0.10)] px-3 py-1.5 text-sm font-bold text-accent-deep">
+                          {state.kidsShufflesUsed}/{maxShuffles}
                         </span>
                         <button
                           type="button"
-                          disabled={familyDisabled}
+                          disabled={kidsDisabled}
                           onClick={() =>
                             updateDay(dayPlan.day, (current) => ({
                               ...current,
-                              familyMealId: getRandomMealId(
-                                [...dayPlan.familyMealIds, ...appState.customMeals.family.map((meal) => meal.id)],
-                                current.familyMealId,
+                              kidsMealId: getRandomMealId(
+                                [...dayPlan.kidsMealIds, ...appState.customMeals.kids.map((meal) => meal.id)],
+                                current.kidsMealId,
                                 appState.mealLikes,
                               ),
-                              familyShufflesUsed: current.familyShufflesUsed + 1,
+                              kidsShufflesUsed: current.kidsShufflesUsed + 1,
                             }))
                           }
                           className={cn(
-                            "inline-flex h-11 w-11 items-center justify-center rounded-full shadow-[0_10px_18px_rgba(143,52,27,0.12)] transition",
-                            familyDisabled
-                              ? "cursor-not-allowed bg-[rgba(119,98,76,0.14)] text-[rgba(119,98,76,0.62)]"
-                              : "bg-[rgba(200,92,61,0.12)] text-accent-deep motion-safe:hover:-translate-y-0.5",
+                            "inline-flex h-9 w-9 items-center justify-center rounded-full transition",
+                            kidsDisabled
+                              ? "cursor-not-allowed bg-[rgba(119,98,76,0.12)] text-[rgba(119,98,76,0.4)]"
+                              : "bg-[rgba(200,92,61,0.10)] text-accent-deep motion-safe:hover:-translate-y-0.5",
                           )}
-                          aria-label={familyDisabled ? "No family shuffles left" : "Shuffle family meal"}
+                          aria-label={kidsDisabled ? "No kids shuffles left" : "Shuffle kids meal"}
                         >
                           {shuffleIcon}
                         </button>
                       </div>
                     </div>
-                    <p className="mt-4 text-sm leading-6 text-muted">{familyMeal?.description}</p>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {familyMeal ? getMealMembers(familyMeal.id).map((member) => <MemberChip key={member.id} member={member} />) : null}
-                    </div>
-                  </section>
-
-                  <section className={cn("rounded-[22px] bg-surface-strong p-4 transition", !state.useKidsMeal && "opacity-80")}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="mb-3 text-xs font-bold uppercase tracking-[0.24em] text-accent-deep">Kids dinner</p>
-                        <h3 className="font-display text-2xl leading-none tracking-tight sm:text-3xl">
-                          {state.useKidsMeal ? kidsMeal?.name ?? "Choose kids meal" : "Same as family dinner"}
-                        </h3>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <label className="relative inline-flex h-7 w-12 cursor-pointer items-center">
-                          <input
-                            type="checkbox"
-                            checked={state.useKidsMeal}
-                            onChange={(event) =>
-                              updateDay(dayPlan.day, (current) => ({
-                                ...current,
-                                useKidsMeal: event.target.checked,
-                              }))
-                            }
-                            className="peer sr-only"
-                          />
-                          <span className="h-7 w-12 rounded-full bg-[rgba(119,98,76,0.2)] transition peer-checked:bg-[#7e9f68]" />
-                          <span className="absolute left-1 top-1 h-5 w-5 rounded-full bg-[#fffaf4] shadow-[0_4px_10px_rgba(47,36,25,0.16)] transition peer-checked:translate-x-5" />
-                        </label>
-
-                        {state.useKidsMeal ? (
-                          <>
-                            <span className="inline-flex min-w-18 items-center justify-center rounded-full bg-[rgba(130,166,118,0.14)] px-3 py-2 text-sm font-bold text-[#49603e]">
-                              {state.kidsShufflesUsed}/{maxShuffles}
-                            </span>
-                            <button
-                              type="button"
-                              disabled={kidsDisabled}
-                              onClick={() =>
-                                updateDay(dayPlan.day, (current) => ({
-                                  ...current,
-                                  kidsMealId: getRandomMealId(
-                                    [...dayPlan.kidsMealIds, ...appState.customMeals.kids.map((meal) => meal.id)],
-                                    current.kidsMealId,
-                                    appState.mealLikes,
-                                  ),
-                                  kidsShufflesUsed: current.kidsShufflesUsed + 1,
-                                }))
-                              }
-                              className={cn(
-                                "inline-flex h-11 w-11 items-center justify-center rounded-full transition",
-                                kidsDisabled
-                                  ? "cursor-not-allowed bg-[rgba(119,98,76,0.14)] text-[rgba(119,98,76,0.62)]"
-                                  : "bg-[rgba(126,159,104,0.14)] text-[#49603e] shadow-[0_10px_18px_rgba(73,96,62,0.14)] motion-safe:hover:-translate-y-0.5",
-                              )}
-                              aria-label={kidsDisabled ? "No kids shuffles left" : "Shuffle kids meal"}
-                            >
-                              {shuffleIcon}
-                            </button>
-                          </>
-                        ) : null}
-                      </div>
-                    </div>
-                    <p className="mt-4 text-sm leading-6 text-muted">
-                      {state.useKidsMeal ? kidsMeal?.description : "Kids will have what the parents are having tonight."}
-                    </p>
-                    {state.useKidsMeal && kidsMeal ? (
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {getMealMembers(kidsMeal.id).map((member) => (
-                          <MemberChip key={member.id} member={member} />
-                        ))}
-                      </div>
-                    ) : null}
-                  </section>
+                  )}
                 </div>
               </article>
             );
