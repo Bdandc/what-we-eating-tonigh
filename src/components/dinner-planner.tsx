@@ -840,7 +840,7 @@ export function DinnerPlanner() {
                 <select
                   value={formType}
                   onChange={(event) => setFormType(event.target.value as MealType)}
-                  className="h-12 rounded-2xl border border-[rgba(103,73,44,0.14)] bg-white px-4 text-foreground outline-none"
+                  className="h-12 rounded-2xl border border-[rgba(103,73,44,0.14)] bg-white px-4 text-foreground outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-1"
                 >
                   <option value="family">Family meal</option>
                   <option value="kids">Kids meal</option>
@@ -852,7 +852,7 @@ export function DinnerPlanner() {
                   value={formName}
                   onChange={(event) => setFormName(event.target.value)}
                   placeholder="Pizza wraps"
-                  className="h-12 rounded-2xl border border-[rgba(103,73,44,0.14)] bg-white px-4 text-foreground outline-none"
+                  className="h-12 rounded-2xl border border-[rgba(103,73,44,0.14)] bg-white px-4 text-foreground outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-1"
                 />
               </label>
               <label className="grid gap-2 text-sm font-semibold text-accent-deep">
@@ -861,7 +861,7 @@ export function DinnerPlanner() {
                   value={formDescription}
                   onChange={(event) => setFormDescription(event.target.value)}
                   placeholder="Quick, easy, and always gets eaten."
-                  className="min-h-24 rounded-2xl border border-[rgba(103,73,44,0.14)] bg-white px-4 py-3 text-foreground outline-none"
+                  className="min-h-24 rounded-2xl border border-[rgba(103,73,44,0.14)] bg-white px-4 py-3 text-foreground outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-1"
                 />
               </label>
               <div className="grid gap-2">
