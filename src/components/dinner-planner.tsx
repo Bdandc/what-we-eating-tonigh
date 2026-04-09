@@ -880,7 +880,7 @@ export function DinnerPlanner() {
                           )
                         }
                         className={cn(
-                          "rounded-full border px-3 py-2 text-sm font-semibold transition",
+                          "min-h-11 rounded-full border px-3 py-2 text-sm font-semibold transition",
                           active ? "border-transparent text-white" : "border-[rgba(103,73,44,0.12)] bg-white text-foreground",
                         )}
                         style={active ? { backgroundColor: member.color } : undefined}
