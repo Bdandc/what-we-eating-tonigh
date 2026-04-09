@@ -728,7 +728,7 @@ export function DinnerPlanner() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="mb-3 text-xs font-bold uppercase tracking-[0.24em] text-accent-deep">Kids dinner</p>
-                        <h3 className="font-display text-[1.8rem] leading-none tracking-tight">
+                        <h3 className="font-display text-2xl leading-none tracking-tight sm:text-3xl">
                           {state.useKidsMeal ? kidsMeal?.name ?? "Choose kids meal" : "Same as family dinner"}
                         </h3>
                       </div>
