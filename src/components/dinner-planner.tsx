@@ -66,7 +66,6 @@ export function DinnerPlanner() {
   const lookup = mealLookup(appState);
   const todayName = getTodayName();
   const todaysState = appState.days[todayName];
-  const todaysPlan = weekPlan.find((item) => item.day === todayName);
   const todaysMeal = todaysState ? lookup.family[todaysState.familyMealId] : null;
 
   useEffect(() => {
@@ -205,16 +204,6 @@ export function DinnerPlanner() {
     };
   }, [appState, supabase]);
 
-  const todaySuggestions =
-    todaysPlan && todaysState
-      ? [...new Set([...todaysPlan.familyMealIds, ...appState.customMeals.family.map((m) => m.id)])]
-          .filter((id) => id !== todaysState.familyMealId)
-          .sort((l, r) => (appState.mealLikes[r]?.length ?? 0) - (appState.mealLikes[l]?.length ?? 0))
-          .slice(0, 3)
-          .map((id) => lookup.family[id]?.name.replace(" Night", ""))
-          .filter(Boolean)
-      : [];
-
   function getMealMembers(mealId: string) {
     const memberIds = appState.mealLikes[mealId] ?? [];
     return appState.familyMembers.filter((m) => memberIds.includes(m.id));
@@ -250,7 +239,7 @@ export function DinnerPlanner() {
               <p className="mb-3 text-xs font-bold uppercase tracking-[0.24em] text-accent-deep">Tonight&apos;s vibe</p>
               <h1 className="font-display text-4xl leading-none sm:text-5xl">{todaysMeal?.name ?? "Dinner idea"}</h1>
               <p className="mt-4 max-w-xl text-base leading-7 text-muted">
-                {todaySuggestions.length > 0 ? `Maybe ${todaySuggestions.join(", ")}.` : "Pick something easy tonight."}
+                {todaysMeal?.description ?? "Pick something easy tonight."}
               </p>
               {todaysMeal ? (
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -353,9 +342,10 @@ export function DinnerPlanner() {
                       <input
                         type="checkbox"
                         checked={state.useKidsMeal}
-                        onChange={(e) =>
-                          updateDay(dayPlan.day, (current) => ({ ...current, useKidsMeal: e.target.checked }))
-                        }
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          updateDay(dayPlan.day, (current) => ({ ...current, useKidsMeal: checked }));
+                        }}
                         className="peer sr-only"
                       />
                       <span className="h-7 w-12 rounded-full bg-[rgba(119,98,76,0.2)] transition peer-checked:bg-accent" />
