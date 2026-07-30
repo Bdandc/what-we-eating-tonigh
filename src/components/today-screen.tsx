@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import {
   MAX_SHUFFLES,
@@ -15,23 +16,23 @@ import {
 } from "@/lib/wawet-state";
 import { useWawet } from "@/components/use-wawet";
 
-const helpIcon = (
+const gearIcon = (
   <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
-    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.8" />
+    <circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
     <path
-      d="M9.6 9.2a2.5 2.5 0 1 1 3.4 2.9c-.7.3-1 .8-1 1.6"
+      d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2L5.5 5.5"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.8"
       strokeLinecap="round"
     />
-    <circle cx="12" cy="16.6" r="1.1" fill="currentColor" />
   </svg>
 );
 
-const chevronLeft = (
+const swapIcon = (
   <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
-    <path d="M14.5 6l-6 6 6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M4 8h13M14 4.5L17.5 8 14 11.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M20 16H7M10 12.5L6.5 16l3.5 3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
@@ -44,47 +45,59 @@ function Skeleton() {
 export function TodayScreen() {
   const [state, setState] = useWawet();
 
+  const takeawayActive = state ? isTakeawayToday(state) && !state.today.takeawaySkipped : false;
+  const dark = takeawayActive;
+
+  useEffect(() => {
+    if (!state) return;
+    document.body.classList.toggle("wawet-dark", dark);
+    document.body.classList.toggle("wawet-light", !dark);
+    return () => {
+      document.body.classList.remove("wawet-dark", "wawet-light");
+    };
+  }, [state, dark]);
+
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col px-6 pb-10 pt-5">
-      <header className="flex items-center justify-end">
-        <Link
-          href="/settings"
-          className="flex items-center gap-2 text-sm font-bold text-foreground"
-        >
-          {helpIcon}
-          Settings
-        </Link>
-      </header>
+    <div className={dark ? "min-h-dvh w-full bg-green-deep text-white" : state ? "min-h-dvh w-full bg-green-light text-foreground" : "min-h-dvh w-full"}>
+      <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-6 pb-10 pt-5">
+        <header className="flex items-center justify-end">
+          <Link href="/settings" className="flex items-center gap-2 text-sm font-bold">
+            Settings
+            {gearIcon}
+          </Link>
+        </header>
 
-      <h1 className="mt-8 text-[28px] font-bold leading-9">
-        What are we eating
-        <br />
-        tonight?
-      </h1>
+        <h1 className="mt-8 text-[28px] font-bold leading-9">
+          What are we eating
+          <br />
+          tonight?
+        </h1>
 
-      {!state ? (
-        <Skeleton />
-      ) : (
-        <TodayCard state={state} setState={setState} />
-      )}
+        {!state ? (
+          <Skeleton />
+        ) : (
+          <TodayCard state={state} setState={setState} takeawayActive={takeawayActive} />
+        )}
 
-      <footer className="mt-auto pt-16 text-center">
-        <Link href="/pantry" className="text-xs font-bold text-foreground underline-offset-2 hover:underline">
-          Don&apos;t have the ingredients?
-        </Link>
-      </footer>
-    </main>
+        <footer className="mt-auto pt-16 text-center">
+          <Link href="/pantry" className="text-xs font-bold underline underline-offset-2">
+            Don&apos;t have the ingredients?
+          </Link>
+        </footer>
+      </main>
+    </div>
   );
 }
 
 function TodayCard({
   state,
   setState,
+  takeawayActive,
 }: {
   state: NonNullable<ReturnType<typeof useWawet>[0]>;
   setState: ReturnType<typeof useWawet>[1];
+  takeawayActive: boolean;
 }) {
-  const takeawayActive = isTakeawayToday(state) && !state.today.takeawaySkipped;
   const takeawaySkippedToday = isTakeawayToday(state) && state.today.takeawaySkipped;
   const { view } = state.today;
   const meal = resolveMeal(
@@ -100,19 +113,19 @@ function TodayCard({
         <article
           data-testid="today-card"
           data-variant="takeaway"
-          className="flex min-h-72 flex-col justify-center rounded-2xl border-2 border-foreground/60 bg-[#d9d9d9] p-6"
+          className="flex min-h-72 flex-col justify-center rounded-2xl bg-surface p-6 text-foreground shadow-sm"
         >
           <h2 className="text-[32px] font-bold leading-10">
             Takeaway
             <br />
             {weekdayName()}
           </h2>
-          <p className="mt-3 text-sm text-foreground/70">Order what you want tonight.</p>
+          <p className="mt-3 text-sm text-muted">Order what you want tonight.</p>
         </article>
         <button
           type="button"
           onClick={() => setState((s) => (s ? skipTakeaway(s) : s))}
-          className="mt-6 rounded-lg bg-surface px-4 py-3 text-xs font-bold shadow-sm"
+          className="mt-6 rounded-lg bg-surface px-4 py-3 text-xs font-bold text-foreground shadow-sm"
         >
           Skip Takeaway tonight
         </button>
@@ -125,19 +138,19 @@ function TodayCard({
       <article
         data-testid="today-card"
         data-variant="normal"
-        className="flex min-h-72 flex-col rounded-2xl bg-surface p-6 shadow-sm"
+        className="flex min-h-72 touch-pan-y flex-col rounded-2xl bg-surface p-6 text-foreground shadow-sm"
       >
         <div className="flex justify-end">
           <button
             type="button"
             disabled={shuffleDisabled}
             onClick={() => setState((s) => (s ? shuffle(s) : s))}
-            className="flex items-center gap-1 text-xs font-bold disabled:text-muted"
+            className="flex items-center gap-1.5 text-xs font-bold disabled:text-muted"
             aria-label={shuffleDisabled ? "No shuffles left today" : "Shuffle suggestion"}
           >
-            {chevronLeft}
+            {swapIcon}
             Shuffle
-            <span data-testid="shuffle-count" className="ml-1">
+            <span data-testid="shuffle-count" className="ml-0.5">
               {state.today.shufflesUsed}/{MAX_SHUFFLES}
             </span>
           </button>
@@ -163,7 +176,7 @@ function TodayCard({
             onClick={() =>
               setState((s) => (s ? setView(s, s.today.view === "kids" ? "family" : "kids") : s))
             }
-            className="rounded-lg bg-surface px-4 py-3 text-xs font-bold shadow-sm"
+            className="rounded-lg border border-green-deep bg-transparent px-4 py-3 text-xs font-bold text-foreground"
           >
             {view === "kids" ? "Family suggestion" : "Kids suggestion"}
           </button>
@@ -172,7 +185,7 @@ function TodayCard({
           <button
             type="button"
             onClick={() => setState((s) => (s ? restoreTakeaway(s) : s))}
-            className="text-xs font-bold text-muted underline-offset-2 hover:underline"
+            className="text-xs font-bold text-green-deep underline underline-offset-2"
           >
             It&apos;s takeaway day · Restore
           </button>

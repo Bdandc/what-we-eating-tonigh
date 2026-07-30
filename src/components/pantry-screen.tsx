@@ -68,8 +68,12 @@ export function PantryScreen() {
         <Link href="/" aria-label="Back" className="-ml-1 p-1 text-foreground">
           {chevronLeft}
         </Link>
-        <button type="button" data-testid="add-item" onClick={openSheet} className="text-sm font-bold">
+        <button type="button" data-testid="add-item" onClick={openSheet} className="flex items-center gap-2 text-sm font-bold">
           Add item
+          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
+            <rect x="3.5" y="3.5" width="17" height="17" rx="3" fill="none" stroke="currentColor" strokeWidth="1.8" />
+            <path d="M12 8v8M8 12h8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
         </button>
       </header>
 
@@ -166,8 +170,8 @@ export function PantryScreen() {
                 onClick={() => setCategory(cat.id)}
                 className={
                   category === cat.id
-                    ? "rounded-lg bg-foreground px-4 py-3 text-xs font-bold text-surface"
-                    : "rounded-lg bg-surface px-4 py-3 text-xs font-bold shadow-sm outline outline-1 outline-line"
+                    ? "rounded-lg border border-green-deep bg-green-light px-4 py-3 text-xs font-bold"
+                    : "rounded-lg border border-line bg-surface px-4 py-3 text-xs font-bold shadow-sm"
                 }
               >
                 {cat.label}
@@ -182,7 +186,7 @@ export function PantryScreen() {
           <button
             type="submit"
             data-testid="save-ingredient"
-            className="mt-5 w-full rounded-lg bg-accent py-3.5 text-sm font-bold text-white"
+            className="mt-5 w-full rounded-lg bg-green-deep py-3.5 text-sm font-bold text-white"
           >
             Save
           </button>
