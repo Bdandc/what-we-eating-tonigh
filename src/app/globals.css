@@ -4,22 +4,19 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
-  --color-surface-strong: var(--surface-strong);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
-  --color-accent-deep: var(--accent-deep);
+  --color-line: var(--line);
   --font-sans: var(--font-sans);
-  --font-display: var(--font-display);
 }
 
 :root {
-  --background: #f6efe6;
-  --foreground: #2f2419;
-  --surface: rgba(255, 252, 247, 0.78);
-  --surface-strong: #fffaf4;
-  --muted: #77624c;
-  --accent: #c85c3d;
-  --accent-deep: #8f341b;
+  --background: #f1f1f1;
+  --foreground: #111111;
+  --surface: #ffffff;
+  --muted: #8a8a8a;
+  --accent: #2f7cf6;
+  --line: #e3e3e3;
 }
 
 * {
@@ -32,12 +29,10 @@ html {
 
 body {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.82), transparent 30%),
-    radial-gradient(circle at top right, rgba(241, 200, 181, 0.72), transparent 25%),
-    linear-gradient(180deg, #f7eadf 0%, var(--background) 45%, #efe1d3 100%);
+  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -47,6 +42,6 @@ textarea {
   font: inherit;
 }
 
-::selection {
-  background: rgba(200, 92, 61, 0.22);
+dialog::backdrop {
+  background: rgba(17, 17, 17, 0.35);
 }
