@@ -8,20 +8,26 @@ import {
 import {
   LEGACY_STORAGE_KEY,
   MAX_CUSTOM_INGREDIENTS,
+  MAX_CUSTOM_MEALS,
   MAX_SHUFFLES,
   STORAGE_KEY,
   type WawetState,
   addCustomIngredient,
+  addCustomMeal,
   canShuffle,
   eligibleIds,
   freshState,
+  fullIds,
   generateId,
+  generateMealId,
   isFallback,
   isTakeawayToday,
   loadState,
   parseState,
   pick,
+  removeCustomMeal,
   resetShuffles,
+  resolveMeal,
   restoreTakeaway,
   rolloverIfNeeded,
   saveState,
@@ -497,5 +503,102 @@ describe("storage wrapping", () => {
       removeItem: () => {},
     });
     expect(() => saveState(freshState(THURSDAY))).not.toThrow();
+  });
+});
+
+describe("custom meals", () => {
+  const THURSDAY2 = new Date(2026, 6, 30, 12, 0, 0);
+  const base = freshState(THURSDAY2);
+
+  function withMeal(name = "Shopska Salad", kind: "family" | "kids" = "family", ingredients: string[] = []) {
+    const result = addCustomMeal(base, { name, kind, ingredients });
+    if (!result.ok) throw new Error(result.error);
+    return result.state;
+  }
+
+  it("joins only its own kind's pool with an opaque m- id", () => {
+    const s = withMeal();
+    const meal = s.customMeals[0];
+    expect(meal.id).toMatch(/^m-[0-9a-f-]{36}$/);
+    expect(fullIds("family", s.customMeals)).toContain(meal.id);
+    expect(fullIds("kids", s.customMeals)).not.toContain(meal.id);
+    expect(eligibleIds("family", s.pantry, s.customMeals)).toContain(meal.id);
+  });
+
+  it("rejects name collisions with seeded and custom meals, case-insensitively", () => {
+    expect(addCustomMeal(base, { name: "lasagna", kind: "family", ingredients: [] }).ok).toBe(false);
+    const s = withMeal();
+    expect(addCustomMeal(s, { name: "SHOPSKA SALAD", kind: "kids", ingredients: [] }).ok).toBe(false);
+  });
+
+  it("prunes unknown ingredient ids on add", () => {
+    const result = addCustomMeal(base, { name: "Mystery", kind: "family", ingredients: ["chicken", "not-real"] });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.state.customMeals[0].ingredients).toEqual(["chicken"]);
+  });
+
+  it("a custom ingredient gates a custom meal through the pantry filter", () => {
+    const ing = addCustomIngredient(base, "Halloumi", "protein");
+    if (!ing.ok) throw new Error("setup");
+    const halloumiId = ing.state.customIngredients[0].id;
+    const meal = addCustomMeal(ing.state, { name: "Halloumi Bake", kind: "family", ingredients: [halloumiId] });
+    if (!meal.ok) throw new Error("setup");
+    let s = meal.state;
+    const mealId = s.customMeals[0].id;
+    expect(eligibleIds("family", s.pantry, s.customMeals)).toContain(mealId);
+    s = { ...s, today: { ...s.today, suggestionId: mealId } };
+    const toggled = togglePantry(s, halloumiId);
+    expect(eligibleIds("family", toggled.pantry, toggled.customMeals)).not.toContain(mealId);
+    expect(toggled.today.suggestionId).not.toBe(mealId);
+    expect(toggled.today.shufflesUsed).toBe(s.today.shufflesUsed);
+  });
+
+  it("removing tonight's suggested custom meal re-picks for free", () => {
+    let s = withMeal();
+    const mealId = s.customMeals[0].id;
+    s = { ...s, today: { ...s.today, suggestionId: mealId } };
+    const removed = removeCustomMeal(s, mealId);
+    expect(removed.customMeals).toEqual([]);
+    expect(removed.today.suggestionId).not.toBe(mealId);
+    expect(removed.today.shufflesUsed).toBe(s.today.shufflesUsed);
+  });
+
+  it("resolveMeal finds seeded and custom meals", () => {
+    const s = withMeal();
+    expect(resolveMeal(s, "lasagna-night")?.name).toBe("Lasagna");
+    expect(resolveMeal(s, s.customMeals[0].id)?.name).toBe("Shopska Salad");
+    expect(resolveMeal(s, "nope")).toBeNull();
+  });
+
+  it("round-trips through parseState and drops malformed entries", () => {
+    const s = withMeal("Keeper", "kids", []);
+    const raw = JSON.stringify({
+      ...s,
+      customMeals: [
+        ...s.customMeals,
+        { id: "m-tampered", name: "Bad id", kind: "family", description: "", ingredients: [] },
+        { id: generateMealId(), name: "Lasagna", kind: "family", description: "", ingredients: [] },
+        { id: generateMealId(), name: "Bad kind", kind: "brunch", description: "", ingredients: [] },
+        { id: generateMealId(), name: "Pruned", kind: "family", description: "", ingredients: ["ghost-item"] },
+      ],
+    });
+    const back = parseState(raw, THURSDAY2);
+    const names = back.customMeals.map((m) => m.name);
+    expect(names).toContain("Keeper");
+    expect(names).toContain("Pruned");
+    expect(names).not.toContain("Bad id");
+    expect(names).not.toContain("Lasagna");
+    expect(names).not.toContain("Bad kind");
+    expect(back.customMeals.find((m) => m.name === "Pruned")?.ingredients).toEqual([]);
+  });
+
+  it("enforces the meal count cap", () => {
+    let s = base;
+    for (let i = 0; i < MAX_CUSTOM_MEALS; i++) {
+      const r = addCustomMeal(s, { name: `Meal ${i}`, kind: "family", ingredients: [] });
+      if (!r.ok) throw new Error(`setup failed at ${i}`);
+      s = r.state;
+    }
+    expect(addCustomMeal(s, { name: "One Too Many", kind: "family", ingredients: [] }).ok).toBe(false);
   });
 });
