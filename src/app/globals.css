@@ -7,16 +7,20 @@
   --color-muted: var(--muted);
   --color-accent: var(--accent);
   --color-line: var(--line);
+  --color-green-light: var(--green-light);
+  --color-green-deep: var(--green-deep);
   --font-sans: var(--font-sans);
 }
 
 :root {
-  --background: #f1f1f1;
-  --foreground: #111111;
+  --background: #f5f5ef;
+  --foreground: #000000;
   --surface: #ffffff;
-  --muted: #8a8a8a;
-  --accent: #2f7cf6;
-  --line: #e3e3e3;
+  --muted: #666666;
+  --accent: #022c19;
+  --line: #e3e3e0;
+  --green-light: #cbf2b9;
+  --green-deep: #022c19;
 }
 
 * {
@@ -35,6 +39,16 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Today-screen page states: toggled on <body> so iOS overscroll shows the
+   right color; the Today component removes both classes on unmount. */
+body.wawet-light {
+  background: var(--green-light);
+}
+
+body.wawet-dark {
+  background: var(--green-deep);
+}
+
 button,
 input,
 select,
@@ -43,5 +57,22 @@ textarea {
 }
 
 dialog::backdrop {
-  background: rgba(17, 17, 17, 0.35);
+  background: rgba(2, 44, 25, 0.35);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes wawet-meal-in {
+    from {
+      opacity: 0;
+      transform: translateX(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .meal-in {
+    animation: wawet-meal-in 160ms ease-out;
+  }
 }

@@ -83,7 +83,7 @@ export function SettingsScreen() {
                     onClick={() => setState((s) => (s ? setTakeawayDay(s, day as Weekday | null) : s))}
                     className={
                       selected
-                        ? "rounded-lg bg-foreground px-4 py-3 text-xs font-bold text-surface"
+                        ? "rounded-lg bg-green-deep px-4 py-3 text-xs font-bold text-white"
                         : "rounded-lg bg-surface px-4 py-3 text-xs font-bold shadow-sm"
                     }
                   >
@@ -107,7 +107,7 @@ export function SettingsScreen() {
               onClick={() => setState((s) => (s ? setKidsEnabled(s, !s.settings.kidsEnabled) : s))}
               className={
                 state.settings.kidsEnabled
-                  ? "relative h-7 w-12 rounded-full bg-foreground transition"
+                  ? "relative h-7 w-12 rounded-full bg-green-deep transition"
                   : "relative h-7 w-12 rounded-full bg-line transition"
               }
             >
@@ -228,7 +228,7 @@ export function SettingsScreen() {
                 onClick={() => setMealKind(kind)}
                 className={
                   mealKind === kind
-                    ? "rounded-lg bg-foreground px-4 py-3 text-xs font-bold text-surface"
+                    ? "rounded-lg bg-green-deep px-4 py-3 text-xs font-bold text-white"
                     : "rounded-lg bg-surface px-4 py-3 text-xs font-bold shadow-sm outline outline-1 outline-line"
                 }
               >
@@ -255,7 +255,7 @@ export function SettingsScreen() {
                   }
                   className={
                     selected
-                      ? "rounded-lg bg-foreground px-3 py-2 text-xs font-bold text-surface"
+                      ? "rounded-lg bg-green-deep px-3 py-2 text-xs font-bold text-white"
                       : "rounded-lg bg-surface px-3 py-2 text-xs font-bold shadow-sm outline outline-1 outline-line"
                   }
                 >
@@ -268,7 +268,7 @@ export function SettingsScreen() {
           <button
             type="submit"
             data-testid="save-meal"
-            className="mt-5 w-full rounded-lg bg-accent py-3.5 text-sm font-bold text-white"
+            className="mt-5 w-full rounded-lg bg-green-deep py-3.5 text-sm font-bold text-white"
           >
             Save
           </button>
