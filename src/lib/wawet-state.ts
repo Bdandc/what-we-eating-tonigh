@@ -6,6 +6,8 @@ import {
   WEEKDAYS,
   familyMeals,
   kidsMeals,
+  mealById,
+  meals,
   seededIngredients,
 } from "@/lib/wawet-data";
 
@@ -24,6 +26,14 @@ export type CustomIngredient = {
   category: Category;
 };
 
+export type CustomMeal = {
+  id: string;
+  name: string;
+  description: string;
+  kind: MealKind;
+  ingredients: string[];
+};
+
 export type Settings = {
   takeawayDay: Weekday | null;
   kidsEnabled: boolean;
@@ -34,6 +44,7 @@ export type WawetState = {
   today: TodayState;
   pantry: Record<string, boolean>;
   customIngredients: CustomIngredient[];
+  customMeals: CustomMeal[];
   settings: Settings;
 };
 
@@ -42,9 +53,17 @@ export const LEGACY_STORAGE_KEY = "dinner-time-next-state-v3";
 export const MAX_SHUFFLES = 3;
 export const MAX_CUSTOM_INGREDIENTS = 200;
 export const MAX_INGREDIENT_NAME_LENGTH = 60;
+export const MAX_CUSTOM_MEALS = 100;
+export const MAX_MEAL_DESCRIPTION_LENGTH = 200;
 
 const CUSTOM_ID_RE =
   /^c-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const CUSTOM_MEAL_ID_RE =
+  /^m-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function stripControl(value: string): string {
+  return value.replace(/[\u0000-\u001f\u007f]/g, "").trim();
+}
 
 // ---------------------------------------------------------------------------
 // Dates
@@ -86,37 +105,56 @@ export function pick(poolIds: string[], seed: string): string {
 // Eligibility (pantry filter)
 // ---------------------------------------------------------------------------
 
-function poolFor(kind: MealKind) {
-  return kind === "family" ? familyMeals : kidsMeals;
+function poolFor(kind: MealKind, customMeals: CustomMeal[] = []) {
+  const seeded = kind === "family" ? familyMeals : kidsMeals;
+  return [...seeded, ...customMeals.filter((meal) => meal.kind === kind)];
 }
 
-export function eligibleIds(kind: MealKind, pantry: Record<string, boolean>): string[] {
-  return poolFor(kind)
+export function eligibleIds(
+  kind: MealKind,
+  pantry: Record<string, boolean>,
+  customMeals: CustomMeal[] = [],
+): string[] {
+  return poolFor(kind, customMeals)
     .filter((meal) => meal.ingredients.every((ing) => pantry[ing] !== false))
     .map((meal) => meal.id);
 }
 
-export function fullIds(kind: MealKind): string[] {
-  return poolFor(kind).map((meal) => meal.id);
+export function fullIds(kind: MealKind, customMeals: CustomMeal[] = []): string[] {
+  return poolFor(kind, customMeals).map((meal) => meal.id);
 }
 
-export function isFallback(kind: MealKind, pantry: Record<string, boolean>): boolean {
-  return eligibleIds(kind, pantry).length === 0;
+export function isFallback(
+  kind: MealKind,
+  pantry: Record<string, boolean>,
+  customMeals: CustomMeal[] = [],
+): boolean {
+  return eligibleIds(kind, pantry, customMeals).length === 0;
 }
 
 /** Eligible pool, or the full pool when the eligible pool is empty (fallback mode). */
-function activeIds(kind: MealKind, pantry: Record<string, boolean>): string[] {
-  const eligible = eligibleIds(kind, pantry);
-  return eligible.length > 0 ? eligible : fullIds(kind);
+function activeIds(
+  kind: MealKind,
+  pantry: Record<string, boolean>,
+  customMeals: CustomMeal[] = [],
+): string[] {
+  const eligible = eligibleIds(kind, pantry, customMeals);
+  return eligible.length > 0 ? eligible : fullIds(kind, customMeals);
 }
 
 function dailyPick(
   kind: MealKind,
   pantry: Record<string, boolean>,
+  customMeals: CustomMeal[],
   date: string,
   salt: number,
 ): string {
-  return pick(activeIds(kind, pantry), `${date}:${kind}:${salt}`);
+  return pick(activeIds(kind, pantry, customMeals), `${date}:${kind}:${salt}`);
+}
+
+/** Resolve a meal id against the seeded library and the user's own meals. */
+export function resolveMeal(state: WawetState, id: string) {
+  return mealById[id] ?? state.customMeals.find((meal) => meal.id === id) ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -137,14 +175,15 @@ export function freshState(now: Date = new Date()): WawetState {
     version: 1,
     today: {
       date,
-      suggestionId: dailyPick("family", pantry, date, 0),
-      kidsSuggestionId: dailyPick("kids", pantry, date, 0),
+      suggestionId: dailyPick("family", pantry, [], date, 0),
+      kidsSuggestionId: dailyPick("kids", pantry, [], date, 0),
       shufflesUsed: 0,
       view: "family",
       takeawaySkipped: false,
     },
     pantry,
     customIngredients: [],
+    customMeals: [],
     settings: { takeawayDay: "Tuesday", kidsEnabled: true },
   };
 }
@@ -215,6 +254,42 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
     pantry[ing.id] = rawPantry[ing.id] !== false;
   }
 
+  // Custom meals: same discipline as custom ingredients — opaque m-<UUID> ids,
+  // global case-insensitive name uniqueness vs the seeded library and each
+  // other, valid kind, ingredients pruned to known ids, capped count.
+  const knownIngredientIds = new Set([
+    ...seededIngredients.map((i) => i.id),
+    ...customIngredients.map((i) => i.id),
+  ]);
+  const seededMealNames = new Set(meals.map((m) => m.name.toLowerCase()));
+  const seenMealIds = new Set<string>();
+  const seenMealNames = new Set<string>();
+  const customMeals: CustomMeal[] = [];
+  if (Array.isArray(parsed.customMeals)) {
+    for (const entry of parsed.customMeals) {
+      if (!isRecord(entry)) continue;
+      const { id, name, description, kind, ingredients } = entry;
+      if (typeof id !== "string" || !CUSTOM_MEAL_ID_RE.test(id) || seenMealIds.has(id)) continue;
+      if (typeof name !== "string") continue;
+      const trimmedName = name.trim();
+      if (trimmedName.length === 0 || trimmedName.length > MAX_INGREDIENT_NAME_LENGTH) continue;
+      const lowerName = trimmedName.toLowerCase();
+      if (seededMealNames.has(lowerName) || seenMealNames.has(lowerName)) continue;
+      if (kind !== "family" && kind !== "kids") continue;
+      const desc =
+        typeof description === "string"
+          ? description.trim().slice(0, MAX_MEAL_DESCRIPTION_LENGTH)
+          : "";
+      const mealIngredients = Array.isArray(ingredients)
+        ? [...new Set(ingredients.filter((i): i is string => typeof i === "string" && knownIngredientIds.has(i)))]
+        : [];
+      if (customMeals.length >= MAX_CUSTOM_MEALS) break;
+      seenMealIds.add(id);
+      seenMealNames.add(lowerName);
+      customMeals.push({ id, name: trimmedName, description: desc, kind, ingredients: mealIngredients });
+    }
+  }
+
   // Today
   const date = typeof rawToday.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(rawToday.date)
     ? rawToday.date
@@ -229,7 +304,7 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
 
   // Suggestion ids: repair dangling OR ineligible ids with the current salt.
   const repair = (kind: MealKind, id: unknown): string => {
-    const active = activeIds(kind, pantry);
+    const active = activeIds(kind, pantry, customMeals);
     if (typeof id === "string" && active.includes(id)) return id;
     return pick(active, `${date}:${kind}:${shufflesUsed}`);
   };
@@ -246,6 +321,7 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
     },
     pantry,
     customIngredients,
+    customMeals,
     settings: { takeawayDay, kidsEnabled },
   };
 
@@ -263,8 +339,8 @@ export function rolloverIfNeeded(state: WawetState, now: Date = new Date()): Waw
     ...state,
     today: {
       date,
-      suggestionId: dailyPick("family", state.pantry, date, 0),
-      kidsSuggestionId: dailyPick("kids", state.pantry, date, 0),
+      suggestionId: dailyPick("family", state.pantry, state.customMeals, date, 0),
+      kidsSuggestionId: dailyPick("kids", state.pantry, state.customMeals, date, 0),
       shufflesUsed: 0,
       view: state.settings.kidsEnabled ? state.today.view : "family",
       takeawaySkipped: false,
@@ -274,7 +350,7 @@ export function rolloverIfNeeded(state: WawetState, now: Date = new Date()): Waw
 
 export function canShuffle(state: WawetState): boolean {
   if (state.today.shufflesUsed >= MAX_SHUFFLES) return false;
-  const active = activeIds(state.today.view, state.pantry);
+  const active = activeIds(state.today.view, state.pantry, state.customMeals);
   return active.length > 1;
 }
 
@@ -283,7 +359,7 @@ export function shuffle(state: WawetState): WawetState {
   const { view, date } = state.today;
   const n = state.today.shufflesUsed + 1;
   const current = view === "family" ? state.today.suggestionId : state.today.kidsSuggestionId;
-  const poolMinusCurrent = activeIds(view, state.pantry).filter((id) => id !== current);
+  const poolMinusCurrent = activeIds(view, state.pantry, state.customMeals).filter((id) => id !== current);
   const next = pick(poolMinusCurrent, `${date}:${view}:${n}`);
   return {
     ...state,
@@ -316,7 +392,7 @@ export function isTakeawayToday(state: WawetState, now: Date = new Date()): bool
 function reevaluateSuggestions(state: WawetState): WawetState {
   const { date, shufflesUsed } = state.today;
   const revalidate = (kind: MealKind, current: string): string => {
-    const active = activeIds(kind, state.pantry);
+    const active = activeIds(kind, state.pantry, state.customMeals);
     if (active.includes(current)) return current;
     return pick(active, `${date}:${kind}:${shufflesUsed}`);
   };
@@ -344,6 +420,62 @@ export type AddIngredientResult =
 
 export function generateId(): string {
   return `c-${crypto.randomUUID()}`;
+}
+
+export function generateMealId(): string {
+  return `m-${crypto.randomUUID()}`;
+}
+
+export type AddMealInput = {
+  name: string;
+  description?: string;
+  kind: MealKind;
+  ingredients: string[];
+};
+
+export function addCustomMeal(
+  state: WawetState,
+  input: AddMealInput,
+  id: string = generateMealId(),
+): AddIngredientResult {
+  const name = stripControl(input.name);
+  if (name.length === 0) return { ok: false, error: "Give it a name first." };
+  if (name.length > MAX_INGREDIENT_NAME_LENGTH) {
+    return { ok: false, error: `Keep it under ${MAX_INGREDIENT_NAME_LENGTH} characters.` };
+  }
+  if (state.customMeals.length >= MAX_CUSTOM_MEALS) {
+    return { ok: false, error: "That's plenty of meals already." };
+  }
+  const lower = name.toLowerCase();
+  const taken =
+    meals.some((m) => m.name.toLowerCase() === lower) ||
+    state.customMeals.some((m) => m.name.toLowerCase() === lower);
+  if (taken) return { ok: false, error: "You already have that meal." };
+
+  const known = new Set([
+    ...seededIngredients.map((i) => i.id),
+    ...state.customIngredients.map((i) => i.id),
+  ]);
+  const ingredients = [...new Set(input.ingredients.filter((i) => known.has(i)))];
+  const description = stripControl(input.description ?? "").slice(0, MAX_MEAL_DESCRIPTION_LENGTH);
+
+  return {
+    ok: true,
+    state: {
+      ...state,
+      customMeals: [
+        ...state.customMeals,
+        { id, name, description, kind: input.kind, ingredients },
+      ],
+    },
+  };
+}
+
+export function removeCustomMeal(state: WawetState, id: string): WawetState {
+  if (!state.customMeals.some((m) => m.id === id)) return state;
+  const next = { ...state, customMeals: state.customMeals.filter((m) => m.id !== id) };
+  // If the removed meal is tonight's suggestion in either view, re-pick for free.
+  return reevaluateSuggestions(next);
 }
 
 export function addCustomIngredient(

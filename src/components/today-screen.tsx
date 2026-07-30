@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { mealById } from "@/lib/wawet-data";
 import {
   MAX_SHUFFLES,
   canShuffle,
   isFallback,
   isTakeawayToday,
+  resolveMeal,
   restoreTakeaway,
   setView,
   shuffle,
@@ -87,10 +87,12 @@ function TodayCard({
   const takeawayActive = isTakeawayToday(state) && !state.today.takeawaySkipped;
   const takeawaySkippedToday = isTakeawayToday(state) && state.today.takeawaySkipped;
   const { view } = state.today;
-  const meal =
-    mealById[view === "family" ? state.today.suggestionId : state.today.kidsSuggestionId];
+  const meal = resolveMeal(
+    state,
+    view === "family" ? state.today.suggestionId : state.today.kidsSuggestionId,
+  );
   const shuffleDisabled = !canShuffle(state);
-  const fallback = isFallback(view, state.pantry);
+  const fallback = isFallback(view, state.pantry, state.customMeals);
 
   if (takeawayActive) {
     return (

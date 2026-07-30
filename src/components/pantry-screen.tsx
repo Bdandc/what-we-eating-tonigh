@@ -176,7 +176,7 @@ export function PantryScreen() {
           </div>
 
           <p className="mt-4 text-xs text-muted">
-            Your own items are for your shopping memory. They don&apos;t change suggestions yet.
+            Your own items can be used by meals you add in Settings.
           </p>
 
           <button
