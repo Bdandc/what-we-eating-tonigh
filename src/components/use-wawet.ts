@@ -18,6 +18,10 @@ export function useWawet() {
   const [state, setState] = useState<WawetState | null>(null);
 
   useEffect(() => {
+    // One-shot localStorage hydration after mount: the server must never read
+    // storage (hydration mismatch), so the initial null -> loaded transition
+    // has to happen in an effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setState(loadState());
   }, []);
 

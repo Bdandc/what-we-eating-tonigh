@@ -352,7 +352,6 @@ export function addCustomIngredient(
   category: Category,
   id: string = generateId(),
 ): AddIngredientResult {
-  // eslint-disable-next-line no-control-regex
   const name = rawName.replace(/[\u0000-\u001f\u007f]/g, "").trim();
   if (name.length === 0) return { ok: false, error: "Give it a name first." };
   if (name.length > MAX_INGREDIENT_NAME_LENGTH) {
