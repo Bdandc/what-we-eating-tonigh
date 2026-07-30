@@ -59,3 +59,20 @@ textarea {
 dialog::backdrop {
   background: rgba(2, 44, 25, 0.35);
 }
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes wawet-meal-in {
+    from {
+      opacity: 0;
+      transform: translateX(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .meal-in {
+    animation: wawet-meal-in 160ms ease-out;
+  }
+}

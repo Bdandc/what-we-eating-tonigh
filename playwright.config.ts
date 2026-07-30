@@ -10,6 +10,14 @@ export default defineConfig({
   },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    // Touch-path coverage for swipe-to-shuffle only; the desktop-verified
+    // specs never run here (testMatch), and the swipe spec gates each test
+    // by project name so nothing double-runs.
+    {
+      name: "mobile-chromium",
+      testMatch: /swipe\.spec\.ts/,
+      use: { ...devices["Pixel 7"] },
+    },
   ],
   webServer: {
     command: "npm run dev",

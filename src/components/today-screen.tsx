@@ -15,6 +15,7 @@ import {
   weekdayName,
 } from "@/lib/wawet-state";
 import { useWawet } from "@/components/use-wawet";
+import { useSwipeShuffle } from "@/components/use-swipe-shuffle";
 
 const gearIcon = (
   <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
@@ -106,6 +107,9 @@ function TodayCard({
   );
   const shuffleDisabled = !canShuffle(state);
   const fallback = isFallback(view, state.pantry, state.customMeals);
+  const { setCard, handlers: swipeHandlers } = useSwipeShuffle(!shuffleDisabled, () =>
+    setState((s) => (s ? shuffle(s) : s)),
+  );
 
   if (takeawayActive) {
     return (
@@ -136,6 +140,8 @@ function TodayCard({
   return (
     <section className="mt-16">
       <article
+        ref={setCard}
+        {...swipeHandlers}
         data-testid="today-card"
         data-variant="normal"
         className="flex min-h-72 touch-pan-y flex-col rounded-2xl bg-surface p-6 text-foreground shadow-sm"
@@ -155,7 +161,7 @@ function TodayCard({
             </span>
           </button>
         </div>
-        <div className="flex flex-1 flex-col justify-center">
+        <div key={meal?.id ?? "none"} className="meal-in flex flex-1 flex-col justify-center">
           <h2 data-testid="meal-name" className="text-[32px] font-bold leading-10">
             {meal?.name ?? "Dinner"}
           </h2>
