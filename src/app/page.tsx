@@ -1,5 +1,7 @@
-import { DinnerPlanner } from "@/components/dinner-planner";
+import { TodayScreen } from "@/components/today-screen";
+
+export const dynamic = "force-dynamic";
 
 export default function Home() {
-  return <DinnerPlanner />;
+  return <TodayScreen />;
 }
