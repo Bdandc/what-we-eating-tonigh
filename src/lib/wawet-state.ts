@@ -544,6 +544,42 @@ export function addCustomMeal(
   };
 }
 
+export function updateCustomMeal(
+  state: WawetState,
+  id: string,
+  input: AddMealInput,
+): AddIngredientResult {
+  const existing = state.customMeals.find((m) => m.id === id);
+  if (!existing) return { ok: false, error: "That meal no longer exists." };
+  const name = stripControl(input.name);
+  if (name.length === 0) return { ok: false, error: "Give it a name first." };
+  if (name.length > MAX_INGREDIENT_NAME_LENGTH) {
+    return { ok: false, error: `Keep it under ${MAX_INGREDIENT_NAME_LENGTH} characters.` };
+  }
+  const lower = name.toLowerCase();
+  const taken =
+    meals.some((m) => m.name.toLowerCase() === lower) ||
+    state.customMeals.some((m) => m.id !== id && m.name.toLowerCase() === lower);
+  if (taken) return { ok: false, error: "You already have that meal." };
+
+  const known = new Set([
+    ...seededIngredients.map((i) => i.id),
+    ...state.customIngredients.map((i) => i.id),
+  ]);
+  const ingredients = [...new Set(input.ingredients.filter((i) => known.has(i)))];
+  const description = stripControl(input.description ?? "").slice(0, MAX_MEAL_DESCRIPTION_LENGTH);
+
+  const next = {
+    ...state,
+    customMeals: state.customMeals.map((m) =>
+      m.id === id ? { id, name, description, kind: input.kind, ingredients } : m,
+    ),
+  };
+  // A kind change can orphan a stored suggestion from its view's pool; the
+  // shared revalidation re-picks it for free in that case.
+  return { ok: true, state: reevaluateSuggestions(next) };
+}
+
 export function removeCustomMeal(state: WawetState, id: string): WawetState {
   if (!state.customMeals.some((m) => m.id === id)) return state;
   const next = { ...state, customMeals: state.customMeals.filter((m) => m.id !== id) };

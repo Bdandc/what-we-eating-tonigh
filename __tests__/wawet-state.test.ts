@@ -43,6 +43,7 @@ import {
   peekNextSuggestion,
   togglePantry,
   todayLocalDate,
+  updateCustomMeal,
   weekdayName,
 } from "@/lib/wawet-state";
 
@@ -769,6 +770,31 @@ describe("custom meals", () => {
     expect(names).not.toContain("Lasagna");
     expect(names).not.toContain("Bad kind");
     expect(back.customMeals.find((m) => m.name === "Pruned")?.ingredients).toEqual([]);
+  });
+
+  it("updateCustomMeal edits in place, allows keeping its own name, dedupes others", () => {
+    const s = withMeal("Shopska Salad", "family", ["tomato"]);
+    const id = s.customMeals[0].id;
+    const kept = updateCustomMeal(s, id, { name: "Shopska Salad", description: "New words", kind: "family", ingredients: ["tomato", "cucumber", "ghost-item"] });
+    expect(kept.ok).toBe(true);
+    if (!kept.ok) return;
+    expect(kept.state.customMeals[0].description).toBe("New words");
+    expect(kept.state.customMeals[0].ingredients).toEqual(["tomato", "cucumber"]);
+
+    const renamedToSeeded = updateCustomMeal(s, id, { name: "Lasagna", kind: "family", ingredients: [] });
+    expect(renamedToSeeded.ok).toBe(false);
+    expect(updateCustomMeal(s, "m-missing", { name: "X", kind: "family", ingredients: [] }).ok).toBe(false);
+  });
+
+  it("updateCustomMeal kind change re-picks a stranded suggestion for free", () => {
+    let s = withMeal("Shopska Salad", "family", []);
+    const id = s.customMeals[0].id;
+    s = { ...s, today: { ...s.today, suggestionId: id } };
+    const result = updateCustomMeal(s, id, { name: "Shopska Salad", kind: "kids", ingredients: [] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.today.suggestionId).not.toBe(id);
+    expect(result.state.today.shufflesUsed).toBe(s.today.shufflesUsed);
   });
 
   it("enforces the meal count cap", () => {

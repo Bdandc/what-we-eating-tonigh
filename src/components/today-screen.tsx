@@ -24,6 +24,23 @@ const DECK_SCALE = 0.965;
 const DECK_EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
 const REST_POSE: ReleasePose = { x: 0, rotation: 0, progress: 0 };
 
+const logoBadge = (
+  <div
+    aria-hidden
+    className="flex h-9 w-9 items-center justify-center rounded-lg border-2 border-current"
+  >
+    <span className="font-serif text-xl font-bold leading-none">?</span>
+  </div>
+);
+
+const warningIcon = (
+  <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+    <path d="M12 3.5 21.5 20h-19L12 3.5Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    <path d="M12 10v4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <circle cx="12" cy="17.2" r="1" fill="currentColor" />
+  </svg>
+);
+
 const gearIcon = (
   <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
     <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.8" />
@@ -44,9 +61,16 @@ const swapIcon = (
   </svg>
 );
 
-function Skeleton() {
+function SplashLoading() {
   return (
-    <div className="mt-16 h-72 animate-pulse rounded-2xl bg-white/70" data-testid="today-skeleton" />
+    <div
+      data-testid="today-skeleton"
+      className="flex flex-1 items-center justify-center"
+    >
+      <div className="flex h-32 w-32 animate-pulse items-center justify-center rounded-2xl bg-green-deep">
+        <span className="font-serif text-7xl font-bold text-green-light">?</span>
+      </div>
+    </div>
   );
 }
 
@@ -66,30 +90,29 @@ export function TodayScreen() {
   }, [state, dark]);
 
   return (
-    <div className={dark ? "min-h-dvh w-full bg-green-deep text-white" : state ? "min-h-dvh w-full bg-green-light text-foreground" : "min-h-dvh w-full"}>
+    <div className={dark ? "min-h-dvh w-full bg-green-deep text-white" : "min-h-dvh w-full bg-green-light text-foreground"}>
       <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-6 pb-10 pt-5">
-        <header className="flex items-center justify-end">
-          <Link href="/settings" className="flex items-center gap-2 text-sm font-bold">
-            Settings
-            {gearIcon}
-          </Link>
-        </header>
+        <header className="flex items-center">{logoBadge}</header>
 
-        <h1 className="mt-8 text-[28px] font-bold leading-9">
+        <h1 className="mt-6 text-[28px] font-bold leading-9">
           What are we eating
           <br />
           tonight?
         </h1>
 
         {!state ? (
-          <Skeleton />
+          <SplashLoading />
         ) : (
           <TodayCard state={state} setState={setState} takeawayActive={takeawayActive} />
         )}
 
-        <footer className="mt-auto pt-16 text-center">
+        <footer className="mt-auto flex flex-col items-start gap-4 pt-16">
           <Link href="/pantry" className="text-xs font-bold underline underline-offset-2">
             Don&apos;t have the ingredients?
+          </Link>
+          <Link href="/settings" className="flex items-center gap-2 text-sm font-bold">
+            Settings
+            {gearIcon}
           </Link>
         </footer>
       </main>
@@ -122,7 +145,29 @@ function TodayCard({
   const { setCard, setDeck, cardRef, handlers: swipeHandlers } = useSwipeShuffle(
     !shuffleDisabled,
     (direction, release) => doShuffle(direction, release),
+    () => wobble(),
   );
+
+  /** The 3/3 "no": a quick shake that says the deck is done for today. */
+  function wobble() {
+    const el = cardRef.current;
+    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    el.setAttribute("data-wobble", "true");
+    const animation = el.animate(
+      [
+        { transform: "none" },
+        { transform: "translateX(-9px) rotate(-1.6deg)" },
+        { transform: "translateX(7px) rotate(1.2deg)" },
+        { transform: "translateX(-5px) rotate(-0.7deg)" },
+        { transform: "translateX(3px) rotate(0.4deg)" },
+        { transform: "none" },
+      ],
+      { duration: 420, easing: "ease-out" },
+    );
+    animation.finished
+      .catch(() => {})
+      .finally(() => el.removeAttribute("data-wobble"));
+  }
 
   /** Throw the top card from wherever it was released and promote the riser. */
   function doShuffle(direction: "left" | "right", release: ReleasePose) {
@@ -249,9 +294,14 @@ function TodayCard({
             </h2>
             <p className="mt-4 text-xs leading-5 text-muted">{meal?.description}</p>
             {offPantry ? (
-              <p data-testid="fallback-notice" className="mt-3 text-xs text-muted">
-                Not everything for this is in your pantry.
-              </p>
+              <Link
+                href="/pantry"
+                data-testid="fallback-notice"
+                className="mt-4 flex items-center gap-2 text-xs font-bold text-foreground"
+              >
+                {warningIcon}
+                <span className="underline underline-offset-2">Missing items in pantry</span>
+              </Link>
             ) : null}
           </div>
         </article>
