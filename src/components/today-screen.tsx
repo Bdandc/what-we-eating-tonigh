@@ -16,8 +16,13 @@ import {
   weekdayName,
 } from "@/lib/wawet-state";
 import { useWawet } from "@/components/use-wawet";
-import { useSwipeShuffle } from "@/components/use-swipe-shuffle";
+import { type ReleasePose, useSwipeShuffle } from "@/components/use-swipe-shuffle";
 import { useCardDeck } from "@/components/use-card-deck";
+
+const DECK_LIFT = 10;
+const DECK_SCALE = 0.965;
+const DECK_EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
+const REST_POSE: ReleasePose = { x: 0, rotation: 0, progress: 0 };
 
 const gearIcon = (
   <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
@@ -111,10 +116,33 @@ function TodayCard({
   const fallback = isFallback(view, state.pantry, state.customMeals);
   const nextMeal = peekNextSuggestion(state);
   const { outgoing, throwCard, clearOutgoing } = useCardDeck<NonNullable<typeof meal>>();
-  const { setCard, handlers: swipeHandlers } = useSwipeShuffle(!shuffleDisabled, (direction) => {
-    throwCard(meal, direction);
+  const { setCard, setDeck, cardRef, handlers: swipeHandlers } = useSwipeShuffle(
+    !shuffleDisabled,
+    (direction, release) => doShuffle(direction, release),
+  );
+
+  /** Throw the top card from wherever it was released and promote the riser. */
+  function doShuffle(direction: "left" | "right", release: ReleasePose) {
+    throwCard(meal, direction, release);
     setState((s) => (s ? shuffle(s) : s));
-  });
+    // The stable card element rises from the under-card's CURRENT pose into
+    // the top slot (WAAPI: no remount, keyboard focus survives). Content has
+    // already swapped to the dealt meal by the time this frame paints, and it
+    // is the same meal the under-card was showing - full continuity.
+    const el = cardRef.current;
+    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const p = release.progress;
+    el.animate(
+      [
+        {
+          transform: `translateY(${DECK_LIFT * (1 - p)}px) scale(${DECK_SCALE + (1 - DECK_SCALE) * p})`,
+          opacity: String(0.55 + 0.45 * p),
+        },
+        { transform: "none", opacity: "1" },
+      ],
+      { duration: 260, easing: DECK_EASE },
+    );
+  }
 
   if (takeawayActive) {
     return (
@@ -144,7 +172,7 @@ function TodayCard({
 
   return (
     <section className="mt-16">
-      <div className="card-deck">
+      <div className="card-deck" ref={setDeck}>
         <div aria-hidden className="card-ghost card-ghost-2" />
         {nextMeal ? (
           <article
@@ -171,6 +199,10 @@ function TodayCard({
             key={outgoing.seq}
             aria-hidden
             onAnimationEnd={clearOutgoing}
+            style={{
+              "--out-x": `${outgoing.pose.x}px`,
+              "--out-rot": `${outgoing.pose.rotation}deg`,
+            } as React.CSSProperties}
             className={`card-out card-out-${outgoing.direction} flex min-h-72 flex-col rounded-2xl bg-surface p-6 text-foreground shadow-sm`}
           >
             <div className="flex justify-end">
@@ -197,10 +229,7 @@ function TodayCard({
             <button
               type="button"
               disabled={shuffleDisabled}
-              onClick={() => {
-                throwCard(meal, "left");
-                setState((s) => (s ? shuffle(s) : s));
-              }}
+              onClick={() => doShuffle("left", REST_POSE)}
               className="flex items-center gap-1.5 text-xs font-bold disabled:text-muted"
               aria-label={shuffleDisabled ? "No shuffles left today" : "Shuffle suggestion"}
             >
@@ -211,7 +240,7 @@ function TodayCard({
               </span>
             </button>
           </div>
-          <div key={meal?.id ?? "none"} className="card-content-in flex flex-1 flex-col justify-center">
+          <div className="flex flex-1 flex-col justify-center">
             <h2 data-testid="meal-name" className="text-[32px] font-bold leading-10">
               {meal?.name ?? "Dinner"}
             </h2>

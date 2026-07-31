@@ -84,9 +84,16 @@ dialog::backdrop {
   box-shadow: 0 1px 2px rgba(2, 44, 25, 0.06);
 }
 
+/* The under-card rises toward the top slot in lockstep with the drag: the
+   swipe hook writes --drag (0..1) on the deck every frame. At rest it sits
+   lifted and dimmed; at full drag it occupies the top slot exactly. */
 .card-ghost-1 {
-  transform: translateY(var(--deck-lift)) scale(var(--deck-scale));
-  opacity: 0.55;
+  transform: translateY(calc(var(--deck-lift) * (1 - var(--drag, 0))))
+    scale(calc(var(--deck-scale) + (1 - var(--deck-scale)) * var(--drag, 0)));
+  opacity: calc(0.55 + 0.45 * var(--drag, 0));
+  transition:
+    transform 220ms var(--deck-ease),
+    opacity 220ms var(--deck-ease);
 }
 
 .card-ghost-2 {
@@ -99,6 +106,14 @@ dialog::backdrop {
   z-index: 10;
 }
 
+/* During a drag the finger drives every transform directly; transitions
+   would lag it. The class is removed on release so the same transitions
+   ease everything home on a below-threshold snap-back. */
+.deck-dragging .card-live,
+.deck-dragging .card-ghost-1 {
+  transition: none !important;
+}
+
 .card-out {
   position: absolute;
   inset: 0;
@@ -107,59 +122,43 @@ dialog::backdrop {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  /* Starts exactly where ghost-1 sits, so the next card looks promoted to the
-     top of the deck rather than faded in. */
-  @keyframes wawet-card-in {
-    from {
-      opacity: 0.55;
-      transform: translateY(var(--deck-lift)) scale(var(--deck-scale));
-    }
-    to {
-      opacity: 1;
-      transform: none;
-    }
-  }
-
+  /* The thrown card continues from the EXACT pose the finger released it at
+     (--out-x/--out-rot are set inline by the deck) and slides fully off the
+     page - no fade-in-place, no teleport back to centre. */
   @keyframes wawet-card-out-left {
     from {
       opacity: 1;
-      transform: none;
+      transform: translateX(var(--out-x, 0px)) rotate(var(--out-rot, 0deg));
     }
     to {
-      opacity: 0;
-      transform: translateX(-115%) rotate(-11deg);
+      opacity: 0.9;
+      transform: translateX(-135%) rotate(-14deg);
     }
   }
 
   @keyframes wawet-card-out-right {
     from {
       opacity: 1;
-      transform: none;
+      transform: translateX(var(--out-x, 0px)) rotate(var(--out-rot, 0deg));
     }
     to {
-      opacity: 0;
-      transform: translateX(115%) rotate(11deg);
+      opacity: 0.9;
+      transform: translateX(135%) rotate(14deg);
     }
   }
 
-  /* Transition covers the snap-back when a drag ends below the shuffle
-     threshold; the swipe hook clears it for the duration of the drag.
-     The entry animation lives on the keyed CONTENT div, not here: a running
-     animation on the article would outrank the drag's inline transform AND
-     remounting the article would drop keyboard focus from the Shuffle button. */
+  /* Snap-back easing for a below-threshold release; disabled during the drag
+     by .deck-dragging. The promote-to-top entry is driven imperatively (WAAPI
+     on the stable article) so the Shuffle button never remounts. */
   .card-live {
     transition: transform 220ms var(--deck-ease);
   }
 
-  .card-content-in {
-    animation: wawet-card-in 380ms var(--deck-ease);
-  }
-
   .card-out-left {
-    animation: wawet-card-out-left 320ms var(--deck-ease) forwards;
+    animation: wawet-card-out-left 300ms cubic-bezier(0.3, 0.7, 0.4, 1) forwards;
   }
 
   .card-out-right {
-    animation: wawet-card-out-right 320ms var(--deck-ease) forwards;
+    animation: wawet-card-out-right 300ms cubic-bezier(0.3, 0.7, 0.4, 1) forwards;
   }
 }

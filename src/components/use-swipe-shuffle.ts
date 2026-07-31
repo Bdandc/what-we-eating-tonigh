@@ -1,9 +1,22 @@
 "use client";
 
 import { useCallback, useRef } from "react";
-import { TAP_SLOP, dragOffset, evaluateSwipe } from "@/lib/swipe";
+import {
+  TAP_SLOP,
+  dragOffset,
+  dragProgress,
+  dragRotation,
+  evaluateSwipe,
+} from "@/lib/swipe";
 
 export type ShuffleDirection = "left" | "right";
+
+/** Where the finger let go, so the throw continues from that exact pose. */
+export type ReleasePose = {
+  x: number;
+  rotation: number;
+  progress: number;
+};
 
 type Gesture = {
   pointerId: number;
@@ -15,17 +28,23 @@ type Gesture = {
 };
 
 /**
- * Swipe-to-shuffle per the consensus plan: primary pointer only, single
- * pointerId, capture held for the whole gesture, transform written directly
- * to the DOM (rAF-throttled, zero React re-renders), cleanup on up/cancel/
+ * Swipe-to-shuffle per the consensus spec: primary pointer only, single
+ * pointerId, capture held for the whole gesture, visuals written directly to
+ * the DOM (rAF-throttled, zero React re-renders), cleanup on up/cancel/
  * lostpointercapture, click suppression cleared on the next pointerdown and
- * by timeout. No transform at all under prefers-reduced-motion.
+ * by timeout. No visual writes at all under prefers-reduced-motion.
+ *
+ * Each frame writes two things: the card's transform (follows the finger
+ * 1:1 up to FOLLOW_LIMIT), and a `--drag` progress custom property on the
+ * DECK element - CSS uses it to raise the under-card toward the top slot in
+ * lockstep with the finger.
  */
 export function useSwipeShuffle(
   enabled: boolean,
-  onShuffle: (direction: ShuffleDirection) => void,
+  onShuffle: (direction: ShuffleDirection, release: ReleasePose) => void,
 ) {
   const cardRef = useRef<HTMLElement | null>(null);
+  const deckRef = useRef<HTMLElement | null>(null);
   const gesture = useRef<Gesture | null>(null);
   const suppressClick = useRef(false);
   const suppressTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -35,12 +54,17 @@ export function useSwipeShuffle(
     if (g?.raf) cancelAnimationFrame(g.raf);
     const el = cardRef.current;
     if (el) {
-      // Hand the transform back to CSS so the card eases home instead of
+      // Hand the transform back to CSS (deck-dragging removal re-enables the
+      // transitions) so the card and under-card ease home together instead of
       // teleporting when a drag ends below the shuffle threshold.
-      el.style.transition = "";
       el.style.transform = "";
       el.style.userSelect = "";
       el.style.webkitUserSelect = "";
+    }
+    const deck = deckRef.current;
+    if (deck) {
+      deck.classList.remove("deck-dragging");
+      deck.style.setProperty("--drag", "0");
     }
   }, []);
 
@@ -74,8 +98,8 @@ export function useSwipeShuffle(
       raf: 0,
     };
     el.setPointerCapture(event.pointerId);
-    // The drag drives transform directly per frame; a transition would lag it.
-    el.style.transition = "none";
+    // The drag drives transforms directly per frame; transitions would lag it.
+    deckRef.current?.classList.add("deck-dragging");
     el.style.userSelect = "none";
     el.style.webkitUserSelect = "none";
   }, []);
@@ -92,10 +116,12 @@ export function useSwipeShuffle(
         g.raf = requestAnimationFrame(() => {
           const current = gesture.current;
           const el = cardRef.current;
+          const deck = deckRef.current;
           if (current && el) {
-            const offset = dragOffset(current.dx);
-            // Small tilt proportional to travel: the card pivots as it lifts.
-            el.style.transform = `translateX(${offset}px) rotate(${offset * 0.05}deg)`;
+            el.style.transform = `translateX(${dragOffset(current.dx)}px) rotate(${dragRotation(current.dx)}deg)`;
+          }
+          if (current && deck) {
+            deck.style.setProperty("--drag", String(dragProgress(current.dx)));
           }
           if (current) current.raf = 0;
         });
@@ -118,7 +144,11 @@ export function useSwipeShuffle(
       }
       endGesture(event);
       if (enabled && evaluateSwipe(dx, dy) === "shuffle") {
-        onShuffle(dx < 0 ? "left" : "right");
+        onShuffle(dx < 0 ? "left" : "right", {
+          x: dragOffset(dx),
+          rotation: dragRotation(dx),
+          progress: dragProgress(dx),
+        });
       }
     },
     [enabled, endGesture, onShuffle],
@@ -145,8 +175,14 @@ export function useSwipeShuffle(
     cardRef.current = el;
   }, []);
 
+  const setDeck = useCallback((el: HTMLElement | null) => {
+    deckRef.current = el;
+  }, []);
+
   return {
     setCard,
+    setDeck,
+    cardRef,
     handlers: {
       onPointerDown,
       onPointerMove,
