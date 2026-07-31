@@ -575,16 +575,39 @@ export function updateCustomMeal(
       m.id === id ? { id, name, description, kind: input.kind, ingredients } : m,
     ),
   };
-  // A kind change can orphan a stored suggestion from its view's pool; the
-  // shared revalidation re-picks it for free in that case.
-  return { ok: true, state: reevaluateSuggestions(next) };
+  // TARGETED repair only: a kind change can strand this meal's own stored
+  // suggestion in the wrong view's pool. Blanket revalidation would also
+  // replace intentionally dealt off-pantry suggestions on unrelated edits.
+  return { ok: true, state: repairSuggestionForMeal(next, id) };
+}
+
+/** Re-pick a view's suggestion ONLY if it points at this meal and the meal
+ * has left that view's pool (deleted, or moved to the other kind). */
+function repairSuggestionForMeal(state: WawetState, mealId: string): WawetState {
+  const { date, shufflesUsed } = state.today;
+  const repair = (kind: MealKind, current: string): string => {
+    if (current !== mealId) return current;
+    const full = fullIds(kind, state.customMeals);
+    if (full.includes(current)) return current;
+    return pick(activeIds(kind, state.pantry, state.customMeals), `${date}:${kind}:${shufflesUsed}`);
+  };
+  const suggestionId = repair("family", state.today.suggestionId);
+  const kidsSuggestionId = repair("kids", state.today.kidsSuggestionId);
+  if (
+    suggestionId === state.today.suggestionId &&
+    kidsSuggestionId === state.today.kidsSuggestionId
+  ) {
+    return state;
+  }
+  return { ...state, today: { ...state.today, suggestionId, kidsSuggestionId } };
 }
 
 export function removeCustomMeal(state: WawetState, id: string): WawetState {
   if (!state.customMeals.some((m) => m.id === id)) return state;
   const next = { ...state, customMeals: state.customMeals.filter((m) => m.id !== id) };
-  // If the removed meal is tonight's suggestion in either view, re-pick for free.
-  return reevaluateSuggestions(next);
+  // If the removed meal is tonight's suggestion in either view, re-pick for
+  // free - and touch nothing else (see repairSuggestionForMeal).
+  return repairSuggestionForMeal(next, id);
 }
 
 export function addCustomIngredient(

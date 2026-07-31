@@ -69,7 +69,22 @@ export function MealFormScreen({ mealId }: { mealId?: string }) {
 
   const pantryItems = [...seededIngredients, ...(state?.customIngredients ?? [])];
 
-  if (state && mealId && !editing) {
+  // No interactive form before hydration (and, when editing, before the
+  // prefill landed): early keystrokes or a premature Save must never vanish.
+  if (!state || (mealId && !loaded)) {
+    return (
+      <main className="mx-auto flex min-h-screen w-full max-w-md flex-col px-6 pt-5">
+        <header className="flex items-center">
+          <Link href="/meals" aria-label="Back" className="-ml-1 p-1 text-foreground">
+            {chevronLeft}
+          </Link>
+        </header>
+        <div className="mt-10 h-72 animate-pulse rounded-2xl bg-white/70" />
+      </main>
+    );
+  }
+
+  if (mealId && !editing) {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-md flex-col px-6 pt-5">
         <header className="flex items-center">

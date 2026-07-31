@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   MAX_SHUFFLES,
@@ -148,10 +148,23 @@ function TodayCard({
     () => wobble(),
   );
 
+  const wobbleAnimation = useRef<Animation | null>(null);
+
+  // Cancel a running wobble if the card leaves the screen mid-shake.
+  useEffect(() => {
+    return () => {
+      wobbleAnimation.current?.cancel();
+      wobbleAnimation.current = null;
+    };
+  }, []);
+
   /** The 3/3 "no": a quick shake that says the deck is done for today. */
   function wobble() {
     const el = cardRef.current;
     if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // One wobble at a time: a fresh rejection restarts the shake, and only
+    // the CURRENT animation may clear the attribute (no stale-finally race).
+    wobbleAnimation.current?.cancel();
     el.setAttribute("data-wobble", "true");
     const animation = el.animate(
       [
@@ -164,9 +177,15 @@ function TodayCard({
       ],
       { duration: 420, easing: "ease-out" },
     );
+    wobbleAnimation.current = animation;
     animation.finished
       .catch(() => {})
-      .finally(() => el.removeAttribute("data-wobble"));
+      .finally(() => {
+        if (wobbleAnimation.current === animation) {
+          el.removeAttribute("data-wobble");
+          wobbleAnimation.current = null;
+        }
+      });
   }
 
   /** Throw the top card from wherever it was released and promote the riser. */

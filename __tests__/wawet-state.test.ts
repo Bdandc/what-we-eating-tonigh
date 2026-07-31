@@ -786,6 +786,26 @@ describe("custom meals", () => {
     expect(updateCustomMeal(s, "m-missing", { name: "X", kind: "family", ingredients: [] }).ok).toBe(false);
   });
 
+  it("editing an UNRELATED meal never touches an off-pantry dealt suggestion", () => {
+    // A dealt-beyond-eligible suggestion (empty pantry -> fallback deal) must
+    // survive a rename of some other meal: blanket revalidation would eat it.
+    let s = withMeal("Shopska Salad", "family", []);
+    s = deselectAll(s);
+    const offPantryDeal = familyMeals.find((m) => m.ingredients.length > 0)!.id;
+    s = { ...s, today: { ...s.today, suggestionId: offPantryDeal } };
+    const edited = updateCustomMeal(s, s.customMeals[0].id, {
+      name: "Renamed Salad",
+      kind: "family",
+      ingredients: [],
+    });
+    expect(edited.ok).toBe(true);
+    if (!edited.ok) return;
+    expect(edited.state.today.suggestionId).toBe(offPantryDeal);
+
+    const removed = removeCustomMeal(s, s.customMeals[0].id);
+    expect(removed.today.suggestionId).toBe(offPantryDeal);
+  });
+
   it("updateCustomMeal kind change re-picks a stranded suggestion for free", () => {
     let s = withMeal("Shopska Salad", "family", []);
     const id = s.customMeals[0].id;
