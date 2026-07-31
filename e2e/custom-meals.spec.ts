@@ -10,7 +10,9 @@ test("add a custom meal via My Meals, it persists, appears on the card when sugg
   // Settings links to the My Meals page; add "Shopska Salad" there.
   await page.getByTestId("view-meals").click();
   await expect(page.getByRole("heading", { name: "My Meals" })).toBeVisible();
-  await expect(page.getByTestId("no-meals")).toBeVisible();
+  // The everyday starters ship pre-filled.
+  await expect(page.getByText("Burger and Chips")).toBeVisible();
+  await expect(page.getByText("Full English")).toBeVisible();
   await page.getByTestId("add-meal").click();
   await page.getByTestId("meal-name-input").fill("Shopska Salad");
   await page.getByTestId("meal-description-input").fill("Tomato, cucumber, and lots of cheese on top.");
@@ -48,7 +50,7 @@ test("add a custom meal via My Meals, it persists, appears on the card when sugg
   // keeps it) and check the Today card renders it — the resolveMeal path.
   const mealId = await page.evaluate(() => {
     const state = JSON.parse(window.localStorage.getItem("wawet-state-v1") ?? "{}");
-    const id = state.customMeals[0].id as string;
+    const id = state.customMeals.find((m: { name: string }) => m.name === "Shopska Salad").id as string;
     state.today.suggestionId = id;
     // The meal needs both of these ticked to stay eligible across the reload.
     state.pantry.tomato = true;
@@ -77,7 +79,9 @@ test("add a custom meal via My Meals, it persists, appears on the card when sugg
   await expect(page.getByTestId("delete-meal")).toHaveAttribute("data-armed", "true");
   await page.getByTestId("delete-meal").click();
   await expect(page.getByRole("heading", { name: "My Meals" })).toBeVisible();
-  await expect(page.getByTestId("no-meals")).toBeVisible();
+  await expect(page.getByText("Shopska Salad")).toHaveCount(0);
+  // The starters are ordinary custom meals and survive unrelated deletes.
+  await expect(page.getByText("Burger and Chips")).toBeVisible();
 });
 
 test("the legacy /settings/add-meal route redirects to /meals/add", async ({ page }) => {
