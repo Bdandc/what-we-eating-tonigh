@@ -3,6 +3,7 @@ import {
   type MealKind,
   type Weekday,
   CATEGORIES,
+  LIKELY_STOCKED,
   WEEKDAYS,
   familyMeals,
   kidsMeals,
@@ -116,7 +117,7 @@ export function eligibleIds(
   customMeals: CustomMeal[] = [],
 ): string[] {
   return poolFor(kind, customMeals)
-    .filter((meal) => meal.ingredients.every((ing) => pantry[ing] !== false))
+    .filter((meal) => meal.ingredients.every((ing) => pantry[ing] === true))
     .map((meal) => meal.id);
 }
 
@@ -162,9 +163,12 @@ export function resolveMeal(state: WawetState, id: string) {
 // ---------------------------------------------------------------------------
 
 function defaultPantry(customIngredients: CustomIngredient[] = []): Record<string, boolean> {
+  // First run: pre-tick the items most kitchens actually have (cupboard,
+  // freezer, and fridge basics) so the pantry is useful before it is touched.
+  const likely = new Set(LIKELY_STOCKED);
   const pantry: Record<string, boolean> = Object.create(null);
-  for (const ing of seededIngredients) pantry[ing.id] = true;
-  for (const ing of customIngredients) pantry[ing.id] = true;
+  for (const ing of seededIngredients) pantry[ing.id] = likely.has(ing.id);
+  for (const ing of customIngredients) pantry[ing.id] = false;
   return pantry;
 }
 
@@ -248,10 +252,10 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
   const rawPantry = isRecord(parsed.pantry) ? parsed.pantry : {};
   const pantry: Record<string, boolean> = Object.create(null);
   for (const ing of seededIngredients) {
-    pantry[ing.id] = rawPantry[ing.id] !== false;
+    pantry[ing.id] = rawPantry[ing.id] === true;
   }
   for (const ing of customIngredients) {
-    pantry[ing.id] = rawPantry[ing.id] !== false;
+    pantry[ing.id] = rawPantry[ing.id] === true;
   }
 
   // Custom meals: same discipline as custom ingredients — opaque m-<UUID> ids,
@@ -302,11 +306,15 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
     rawToday.view === "kids" && kidsEnabled ? "kids" : "family";
   const takeawaySkipped = rawToday.takeawaySkipped === true;
 
-  // Suggestion ids: repair dangling OR ineligible ids with the current salt.
+  // Suggestion ids: repair DANGLING ids only (meal no longer exists). An
+  // id that is merely ineligible under the current pantry is kept: the pantry
+  // is a draft until the user commits it, so a reload or navigation must never
+  // re-pick the dish on its own. Eligibility re-matching happens exclusively
+  // in commitPantry(), at rollover, and on shuffle.
   const repair = (kind: MealKind, id: unknown): string => {
-    const active = activeIds(kind, pantry, customMeals);
-    if (typeof id === "string" && active.includes(id)) return id;
-    return pick(active, `${date}:${kind}:${shufflesUsed}`);
+    const full = fullIds(kind, customMeals);
+    if (typeof id === "string" && full.includes(id)) return id;
+    return pick(activeIds(kind, pantry, customMeals), `${date}:${kind}:${shufflesUsed}`);
   };
 
   const state: WawetState = {
@@ -354,13 +362,28 @@ export function canShuffle(state: WawetState): boolean {
   return active.length > 1;
 }
 
-export function shuffle(state: WawetState): WawetState {
-  if (!canShuffle(state)) return state;
+/** The id the next shuffle will deal, or null when no shuffle is possible.
+ * Shared by shuffle() and peekNextSuggestion() so the card shown peeking
+ * under the deck can never differ from the card the shuffle actually deals. */
+function nextShuffleId(state: WawetState): string | null {
+  if (!canShuffle(state)) return null;
   const { view, date } = state.today;
   const n = state.today.shufflesUsed + 1;
   const current = view === "family" ? state.today.suggestionId : state.today.kidsSuggestionId;
   const poolMinusCurrent = activeIds(view, state.pantry, state.customMeals).filter((id) => id !== current);
-  const next = pick(poolMinusCurrent, `${date}:${view}:${n}`);
+  return pick(poolMinusCurrent, `${date}:${view}:${n}`);
+}
+
+export function peekNextSuggestion(state: WawetState) {
+  const id = nextShuffleId(state);
+  return id === null ? null : resolveMeal(state, id);
+}
+
+export function shuffle(state: WawetState): WawetState {
+  const next = nextShuffleId(state);
+  if (next === null) return state;
+  const { view } = state.today;
+  const n = state.today.shufflesUsed + 1;
   return {
     ...state,
     today: {
@@ -411,7 +434,13 @@ export function togglePantry(state: WawetState, ingredientId: string): WawetStat
   const pantry: Record<string, boolean> = Object.create(null);
   Object.assign(pantry, state.pantry);
   pantry[ingredientId] = !pantry[ingredientId];
-  return reevaluateSuggestions({ ...state, pantry });
+  // Selection is a draft: the dish only changes when the user hits Save.
+  return { ...state, pantry };
+}
+
+/** Commit the current pantry selection: re-match tonight's dish against it. */
+export function commitPantry(state: WawetState): WawetState {
+  return reevaluateSuggestions(state);
 }
 
 export type AddIngredientResult =

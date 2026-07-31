@@ -2,13 +2,14 @@
 
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   type Category,
   type Ingredient,
   CATEGORIES,
   seededIngredients,
 } from "@/lib/wawet-data";
-import { addCustomIngredient, togglePantry } from "@/lib/wawet-state";
+import { addCustomIngredient, commitPantry, togglePantry } from "@/lib/wawet-state";
 import { useWawet } from "@/components/use-wawet";
 
 const CHIP_LIMIT = 8;
@@ -21,6 +22,7 @@ const chevronLeft = (
 
 export function PantryScreen() {
   const [state, setState] = useWawet();
+  const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [name, setName] = useState("");
   const [category, setCategory] = useState<Category>("protein");
@@ -48,6 +50,11 @@ export function PantryScreen() {
     dialogRef.current?.close();
   }
 
+  function saveSelection() {
+    setState((s) => (s ? commitPantry(s) : s));
+    router.push("/");
+  }
+
   function save() {
     setState((s) => {
       if (!s) return s;
@@ -63,7 +70,7 @@ export function PantryScreen() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col px-6 pb-10 pt-5">
+    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col px-6 pb-28 pt-5">
       <header className="flex items-center justify-between">
         <Link href="/" aria-label="Back" className="-ml-1 p-1 text-foreground">
           {chevronLeft}
@@ -91,7 +98,7 @@ export function PantryScreen() {
                 <h2 className="text-base font-bold">{group.label}</h2>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {visible.map((item) => {
-                    const have = state.pantry[item.id] !== false;
+                    const have = state.pantry[item.id] === true;
                     return (
                       <button
                         key={item.id}
@@ -112,6 +119,7 @@ export function PantryScreen() {
                   {group.items.length > CHIP_LIMIT && !isOpen ? (
                     <button
                       type="button"
+                      data-testid={`see-more-${group.id}`}
                       onClick={() => setExpanded((e) => ({ ...e, [group.id]: true }))}
                       className="px-2 py-3 text-xs font-bold text-muted underline-offset-2 hover:underline"
                     >
@@ -124,6 +132,19 @@ export function PantryScreen() {
           })}
         </div>
       )}
+
+      {state ? (
+        <div className="fixed inset-x-0 bottom-0 z-10 mx-auto w-full max-w-md border-t border-line bg-surface px-6 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4">
+          <button
+            type="button"
+            data-testid="save-pantry"
+            onClick={saveSelection}
+            className="w-full rounded-lg bg-green-deep py-3.5 text-sm font-bold text-white"
+          >
+            Save
+          </button>
+        </div>
+      ) : null}
 
       <dialog
         ref={dialogRef}

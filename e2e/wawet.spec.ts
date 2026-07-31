@@ -17,17 +17,22 @@ function expected(now: Date) {
 }
 
 /**
- * A weekday (non-Tuesday) whose deterministic family suggestion has at least
- * one mapped ingredient, so the pantry-invalidation flow can be driven from
- * the UI. Computed from the production module, not hardcoded.
+ * Open the Today screen with every pantry item already ticked and a known
+ * mapped meal as tonight's suggestion, so the pantry flow can be driven from
+ * the UI. Returns the seeded meal.
  */
-function dateWithMappedFamilySuggestion(): Date {
-  for (let day = 1; day <= 60; day++) {
-    const candidate = new Date(2026, 7, day, 12, 0, 0);
-    if (candidate.getDay() === 2) continue; // skip takeaway Tuesdays
-    if (expected(candidate).family.ingredients.length > 0) return candidate;
-  }
-  throw new Error("no candidate date found — did the meal mappings all disappear?");
+async function openWithFullPantry(page: Page, now: Date) {
+  const meal = familyMeals.find((m) => m.ingredients.length > 0)!;
+  const state = freshState(now);
+  for (const id of Object.keys(state.pantry)) state.pantry[id] = true;
+  state.today.suggestionId = meal.id;
+  await page.clock.install({ time: now });
+  await page.addInitScript(
+    (value) => window.localStorage.setItem("wawet-state-v1", value),
+    JSON.stringify(state),
+  );
+  await page.goto("/");
+  return meal;
 }
 
 async function openAt(page: Page, now: Date, path = "/") {
@@ -99,18 +104,24 @@ test.describe("takeaway day", () => {
 });
 
 test.describe("pantry", () => {
-  test("marking a needed ingredient as don't-have re-picks the suggestion for free", async ({ page }) => {
-    const now = dateWithMappedFamilySuggestion();
-    const meal = expected(now).family;
-    await openAt(page, now);
+  test("unticking a needed ingredient re-picks the suggestion on save, for free", async ({ page }) => {
+    const meal = await openWithFullPantry(page, THURSDAY);
     await expect(page.getByTestId("meal-name")).toHaveText(meal.name);
 
     await page.getByRole("link", { name: "Don't have the ingredients?" }).click();
     await page.getByTestId(`chip-${meal.ingredients[0]}`).click();
-    await page.getByRole("link", { name: "Back" }).click();
+    await page.getByTestId("save-pantry").click();
 
     await expect(page.getByTestId("meal-name")).not.toHaveText(meal.name);
     await expect(page.getByTestId("shuffle-count")).toHaveText("0/3");
+  });
+
+  test("leaving without saving keeps tonight's dish", async ({ page }) => {
+    const meal = await openWithFullPantry(page, THURSDAY);
+    await page.getByRole("link", { name: "Don't have the ingredients?" }).click();
+    await page.getByTestId(`chip-${meal.ingredients[0]}`).click();
+    await page.getByRole("link", { name: "Back" }).click();
+    await expect(page.getByTestId("meal-name")).toHaveText(meal.name);
   });
 
   test("adds a custom item via the sheet, persists it, and rejects duplicates", async ({ page }) => {
@@ -119,9 +130,13 @@ test.describe("pantry", () => {
     await page.getByTestId("ingredient-name").fill("Halloumi");
     await page.getByRole("radio", { name: "Veg" }).click();
     await page.getByTestId("save-ingredient").click();
+    // Veg has grown past the 8-chip fold; custom items append after the seeded
+    // ones, so expand the category before asserting.
+    await page.getByTestId("see-more-veg").click();
     await expect(page.getByRole("button", { name: "Halloumi" })).toBeVisible();
 
     await page.reload();
+    await page.getByTestId("see-more-veg").click();
     await expect(page.getByRole("button", { name: "Halloumi" })).toBeVisible();
 
     await page.getByTestId("add-item").click();
@@ -132,13 +147,13 @@ test.describe("pantry", () => {
 
   test("shows all seeded categories and chips toggle visually", async ({ page }) => {
     await openAt(page, THURSDAY, "/pantry");
-    for (const label of ["Proteins", "Veg", "Sides", "MISC"]) {
+    for (const label of ["Proteins", "Veg", "Carbs & sides", "Dairy & tins"]) {
       await expect(page.getByRole("heading", { name: label, exact: true })).toBeVisible();
     }
     const chip = page.getByTestId("chip-chicken");
-    await expect(chip).toHaveAttribute("aria-pressed", "true");
-    await chip.click();
     await expect(chip).toHaveAttribute("aria-pressed", "false");
+    await chip.click();
+    await expect(chip).toHaveAttribute("aria-pressed", "true");
   });
 });
 

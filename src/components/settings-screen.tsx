@@ -1,10 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
 import Link from "next/link";
-import { type MealKind, type Weekday, WEEKDAYS, seededIngredients } from "@/lib/wawet-data";
+import { type Weekday, WEEKDAYS } from "@/lib/wawet-data";
 import {
-  addCustomMeal,
   removeCustomMeal,
   resetShuffles,
   setKidsEnabled,
@@ -20,41 +18,6 @@ const chevronLeft = (
 
 export function SettingsScreen() {
   const [state, setState] = useWawet();
-  const mealDialogRef = useRef<HTMLDialogElement>(null);
-  const [mealName, setMealName] = useState("");
-  const [mealDescription, setMealDescription] = useState("");
-  const [mealKind, setMealKind] = useState<MealKind>("family");
-  const [mealIngredients, setMealIngredients] = useState<string[]>([]);
-  const [mealError, setMealError] = useState<string | null>(null);
-
-  function openMealSheet() {
-    setMealName("");
-    setMealDescription("");
-    setMealKind("family");
-    setMealIngredients([]);
-    setMealError(null);
-    mealDialogRef.current?.showModal();
-  }
-
-  function saveMeal() {
-    setState((s) => {
-      if (!s) return s;
-      const result = addCustomMeal(s, {
-        name: mealName,
-        description: mealDescription,
-        kind: mealKind,
-        ingredients: mealIngredients,
-      });
-      if (!result.ok) {
-        setMealError(result.error);
-        return s;
-      }
-      setMealError(null);
-      mealDialogRef.current?.close();
-      return result.state;
-    });
-  }
-
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col px-6 pb-10 pt-5">
       <header className="flex items-center">
@@ -124,9 +87,9 @@ export function SettingsScreen() {
           <section>
             <div className="flex items-center justify-between">
               <h2 className="text-base font-bold">Your meals</h2>
-              <button type="button" data-testid="add-meal" onClick={openMealSheet} className="text-sm font-bold">
+              <Link href="/settings/add-meal" data-testid="add-meal" className="text-sm font-bold">
                 Add a meal
-              </button>
+              </Link>
             </div>
             <p className="mt-1 text-xs text-muted">
               Your meals join the suggestions. Pantry items they need can filter them out.
@@ -171,109 +134,6 @@ export function SettingsScreen() {
           </section>
         </div>
       )}
-
-      <dialog
-        ref={mealDialogRef}
-        aria-label="Add a meal"
-        className="fixed inset-x-0 bottom-0 mt-auto w-full max-w-md rounded-t-3xl bg-surface p-6 backdrop:bg-black/35 [margin-inline:auto]"
-        onClick={(event) => {
-          if (event.target === mealDialogRef.current) mealDialogRef.current?.close();
-        }}
-      >
-        <form
-          method="dialog"
-          onSubmit={(event) => {
-            event.preventDefault();
-            saveMeal();
-          }}
-        >
-          <h2 className="text-[22px] font-bold">Add a meal</h2>
-
-          <label htmlFor="meal-name" className="mt-5 block text-base font-bold">
-            Name
-          </label>
-          <input
-            id="meal-name"
-            data-testid="meal-name-input"
-            value={mealName}
-            onChange={(event) => setMealName(event.target.value)}
-            autoFocus
-            className="mt-2 w-full rounded-lg border border-line bg-surface px-4 py-3 text-sm outline-none focus:border-accent"
-          />
-          {mealError ? (
-            <p data-testid="meal-error" className="mt-2 text-xs font-bold text-[#c0392b]">
-              {mealError}
-            </p>
-          ) : null}
-
-          <label htmlFor="meal-description" className="mt-5 block text-base font-bold">
-            Description <span className="font-normal text-muted">(optional)</span>
-          </label>
-          <input
-            id="meal-description"
-            data-testid="meal-description-input"
-            value={mealDescription}
-            onChange={(event) => setMealDescription(event.target.value)}
-            className="mt-2 w-full rounded-lg border border-line bg-surface px-4 py-3 text-sm outline-none focus:border-accent"
-          />
-
-          <p className="mt-5 text-base font-bold">For</p>
-          <div className="mt-2 flex gap-2" role="radiogroup" aria-label="Meal kind">
-            {(["family", "kids"] as const).map((kind) => (
-              <button
-                key={kind}
-                type="button"
-                role="radio"
-                aria-checked={mealKind === kind}
-                onClick={() => setMealKind(kind)}
-                className={
-                  mealKind === kind
-                    ? "rounded-lg bg-green-deep px-4 py-3 text-xs font-bold text-white"
-                    : "rounded-lg bg-surface px-4 py-3 text-xs font-bold shadow-sm outline outline-1 outline-line"
-                }
-              >
-                {kind === "family" ? "Family" : "Kids"}
-              </button>
-            ))}
-          </div>
-
-          <p className="mt-5 text-base font-bold">
-            Needs <span className="font-normal text-muted">(from your pantry, optional)</span>
-          </p>
-          <div className="mt-2 flex max-h-40 flex-wrap gap-2 overflow-y-auto">
-            {[...seededIngredients, ...(state?.customIngredients ?? [])].map((ing) => {
-              const selected = mealIngredients.includes(ing.id);
-              return (
-                <button
-                  key={ing.id}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() =>
-                    setMealIngredients((current) =>
-                      selected ? current.filter((i) => i !== ing.id) : [...current, ing.id],
-                    )
-                  }
-                  className={
-                    selected
-                      ? "rounded-lg bg-green-deep px-3 py-2 text-xs font-bold text-white"
-                      : "rounded-lg bg-surface px-3 py-2 text-xs font-bold shadow-sm outline outline-1 outline-line"
-                  }
-                >
-                  {ing.name}
-                </button>
-              );
-            })}
-          </div>
-
-          <button
-            type="submit"
-            data-testid="save-meal"
-            className="mt-5 w-full rounded-lg bg-green-deep py-3.5 text-sm font-bold text-white"
-          >
-            Save
-          </button>
-        </form>
-      </dialog>
     </main>
   );
 }

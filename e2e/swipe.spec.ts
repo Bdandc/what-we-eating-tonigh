@@ -25,6 +25,9 @@ async function mouseDrag(page: Page, dx: number, dy = 0) {
     await page.mouse.move(startX + (dx * i) / 5, startY + (dy * i) / 5);
   }
   await page.mouse.up();
+  // Let the deck's throw/entry animations finish: the virtual clock drives the
+  // animation timeline, so without this the outgoing overlay never clears.
+  await page.clock.runFor(600);
 }
 
 /** Touch drag via CDP Input.dispatchTouchEvent (Playwright's Touchscreen is tap-only). */
@@ -46,6 +49,7 @@ async function touchDrag(page: Page, dx: number, dy = 0) {
   }
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   await cdp.detach();
+  await page.clock.runFor(600);
 }
 
 test("precondition: default family pool has more than one meal", () => {
