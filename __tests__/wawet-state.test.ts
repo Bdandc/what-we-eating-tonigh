@@ -39,6 +39,7 @@ import {
   skipTakeaway,
   applyPantryOverrides,
   commitPantry,
+  mealMatchesPantry,
   peekNextSuggestion,
   togglePantry,
   todayLocalDate,
@@ -339,6 +340,66 @@ describe("pantry filter + invalidation", () => {
     const s = freshState(THURSDAY);
     expect(togglePantry(s, "__proto__")).toBe(s);
     expect(togglePantry(s, "not-a-thing")).toBe(s);
+  });
+});
+
+describe("sparse eligible pools never kill the deck", () => {
+  /** Pantry ticking exactly fish-and-chips' heroes: eligible family pool = 1. */
+  function oneEligible(): WawetState {
+    let s = deselectAll(freshState(THURSDAY));
+    for (const id of ["fish", "chips", "garden-peas"]) s = togglePantry(s, id);
+    s = commitPantry(s);
+    return { ...s, today: { ...s.today, suggestionId: "fish-and-chips" } };
+  }
+
+  it("a one-meal eligible pool still shuffles, extending to the full pool", () => {
+    let s = oneEligible();
+    expect(eligibleIds("family", s.pantry)).toEqual(["fish-and-chips"]);
+    expect(canShuffle(s)).toBe(true);
+    const peeked = peekNextSuggestion(s);
+    expect(peeked).not.toBeNull();
+    s = shuffle(s);
+    expect(s.today.shufflesUsed).toBe(1);
+    expect(s.today.suggestionId).not.toBe("fish-and-chips");
+    expect(s.today.suggestionId).toBe(peeked?.id);
+  });
+
+  it("mealMatchesPantry flags meals dealt beyond the eligible pool", () => {
+    let s = oneEligible();
+    expect(mealMatchesPantry(s.pantry, familyMeals.find((m) => m.id === "fish-and-chips")!)).toBe(true);
+    s = shuffle(s);
+    const dealt = familyMeals.find((m) => m.id === s.today.suggestionId)!;
+    expect(mealMatchesPantry(s.pantry, dealt)).toBe(false);
+  });
+
+  it("the cap still holds when dealing from the extended pool", () => {
+    let s = oneEligible();
+    for (let n = 0; n < MAX_SHUFFLES; n++) s = shuffle(s);
+    expect(s.today.shufflesUsed).toBe(MAX_SHUFFLES);
+    expect(canShuffle(s)).toBe(false);
+    expect(shuffle(s)).toBe(s);
+  });
+});
+
+describe("legacy-state migration", () => {
+  it("a pre-catalogue pantry (removed ids present) gets the staples ticked in", () => {
+    const fresh = freshState(THURSDAY);
+    const raw = JSON.stringify({
+      ...fresh,
+      pantry: { chicken: true, "cheese-sticks": true, "pizza-pockets": true },
+    });
+    const s = parseState(raw, THURSDAY);
+    expect(s.pantry.chicken).toBe(true);
+    for (const id of LIKELY_STOCKED) expect(s.pantry[id]).toBe(true);
+    expect("cheese-sticks" in s.pantry).toBe(false);
+  });
+
+  it("a current-era pantry is NOT force-ticked (user unticks stay honored)", () => {
+    const fresh = freshState(THURSDAY);
+    const raw = JSON.stringify({ ...fresh, pantry: { chicken: true } });
+    const s = parseState(raw, THURSDAY);
+    expect(s.pantry.chicken).toBe(true);
+    expect(s.pantry.pasta).toBe(false);
   });
 });
 
