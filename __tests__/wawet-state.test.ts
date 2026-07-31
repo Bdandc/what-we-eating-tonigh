@@ -43,6 +43,7 @@ import {
   peekNextSuggestion,
   togglePantry,
   todayLocalDate,
+  updateCustomMeal,
   weekdayName,
 } from "@/lib/wawet-state";
 
@@ -769,6 +770,61 @@ describe("custom meals", () => {
     expect(names).not.toContain("Lasagna");
     expect(names).not.toContain("Bad kind");
     expect(back.customMeals.find((m) => m.name === "Pruned")?.ingredients).toEqual([]);
+  });
+
+  it("updateCustomMeal edits in place, allows keeping its own name, dedupes others", () => {
+    const s = withMeal("Shopska Salad", "family", ["tomato"]);
+    const id = s.customMeals[0].id;
+    const kept = updateCustomMeal(s, id, { name: "Shopska Salad", description: "New words", kind: "family", ingredients: ["tomato", "cucumber", "ghost-item"] });
+    expect(kept.ok).toBe(true);
+    if (!kept.ok) return;
+    expect(kept.state.customMeals[0].description).toBe("New words");
+    expect(kept.state.customMeals[0].ingredients).toEqual(["tomato", "cucumber"]);
+
+    const renamedToSeeded = updateCustomMeal(s, id, { name: "Lasagna", kind: "family", ingredients: [] });
+    expect(renamedToSeeded.ok).toBe(false);
+    expect(updateCustomMeal(s, "m-missing", { name: "X", kind: "family", ingredients: [] }).ok).toBe(false);
+  });
+
+  it("editing an UNRELATED meal never touches an off-pantry dealt suggestion", () => {
+    // A dealt-beyond-eligible suggestion (empty pantry -> fallback deal) must
+    // survive a rename of some other meal: blanket revalidation would eat it.
+    let s = withMeal("Shopska Salad", "family", []);
+    s = deselectAll(s);
+    const offPantryDeal = familyMeals.find((m) => m.ingredients.length > 0)!.id;
+    s = { ...s, today: { ...s.today, suggestionId: offPantryDeal } };
+    const edited = updateCustomMeal(s, s.customMeals[0].id, {
+      name: "Renamed Salad",
+      kind: "family",
+      ingredients: [],
+    });
+    expect(edited.ok).toBe(true);
+    if (!edited.ok) return;
+    expect(edited.state.today.suggestionId).toBe(offPantryDeal);
+
+    const removed = removeCustomMeal(s, s.customMeals[0].id);
+    expect(removed.today.suggestionId).toBe(offPantryDeal);
+  });
+
+  it("updateCustomMeal validates like add: empty name, over-length, sliced description", () => {
+    const s = withMeal("Shopska Salad", "family", []);
+    const id = s.customMeals[0].id;
+    expect(updateCustomMeal(s, id, { name: "   ", kind: "family", ingredients: [] }).ok).toBe(false);
+    expect(updateCustomMeal(s, id, { name: "x".repeat(61), kind: "family", ingredients: [] }).ok).toBe(false);
+    const long = updateCustomMeal(s, id, { name: "Fine", description: "d".repeat(500), kind: "family", ingredients: [] });
+    expect(long.ok).toBe(true);
+    if (long.ok) expect(long.state.customMeals[0].description.length).toBe(200);
+  });
+
+  it("updateCustomMeal kind change re-picks a stranded suggestion for free", () => {
+    let s = withMeal("Shopska Salad", "family", []);
+    const id = s.customMeals[0].id;
+    s = { ...s, today: { ...s.today, suggestionId: id } };
+    const result = updateCustomMeal(s, id, { name: "Shopska Salad", kind: "kids", ingredients: [] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.today.suggestionId).not.toBe(id);
+    expect(result.state.today.shufflesUsed).toBe(s.today.shufflesUsed);
   });
 
   it("enforces the meal count cap", () => {

@@ -487,9 +487,12 @@ export function applyPantryOverrides(
   return commitPantry({ ...state, pantry });
 }
 
-export type AddIngredientResult =
+export type SaveResult =
   | { ok: true; state: WawetState }
   | { ok: false; error: string };
+
+/** @deprecated old name kept for callers; same shape as SaveResult. */
+export type AddIngredientResult = SaveResult;
 
 export function generateId(): string {
   return `c-${crypto.randomUUID()}`;
@@ -510,7 +513,7 @@ export function addCustomMeal(
   state: WawetState,
   input: AddMealInput,
   id: string = generateMealId(),
-): AddIngredientResult {
+): SaveResult {
   const name = stripControl(input.name);
   if (name.length === 0) return { ok: false, error: "Give it a name first." };
   if (name.length > MAX_INGREDIENT_NAME_LENGTH) {
@@ -544,11 +547,70 @@ export function addCustomMeal(
   };
 }
 
+export function updateCustomMeal(
+  state: WawetState,
+  id: string,
+  input: AddMealInput,
+): SaveResult {
+  const existing = state.customMeals.find((m) => m.id === id);
+  if (!existing) return { ok: false, error: "That meal no longer exists." };
+  const name = stripControl(input.name);
+  if (name.length === 0) return { ok: false, error: "Give it a name first." };
+  if (name.length > MAX_INGREDIENT_NAME_LENGTH) {
+    return { ok: false, error: `Keep it under ${MAX_INGREDIENT_NAME_LENGTH} characters.` };
+  }
+  const lower = name.toLowerCase();
+  const taken =
+    meals.some((m) => m.name.toLowerCase() === lower) ||
+    state.customMeals.some((m) => m.id !== id && m.name.toLowerCase() === lower);
+  if (taken) return { ok: false, error: "You already have that meal." };
+
+  const known = new Set([
+    ...seededIngredients.map((i) => i.id),
+    ...state.customIngredients.map((i) => i.id),
+  ]);
+  const ingredients = [...new Set(input.ingredients.filter((i) => known.has(i)))];
+  const description = stripControl(input.description ?? "").slice(0, MAX_MEAL_DESCRIPTION_LENGTH);
+
+  const next = {
+    ...state,
+    customMeals: state.customMeals.map((m) =>
+      m.id === id ? { id, name, description, kind: input.kind, ingredients } : m,
+    ),
+  };
+  // TARGETED repair only: a kind change can strand this meal's own stored
+  // suggestion in the wrong view's pool. Blanket revalidation would also
+  // replace intentionally dealt off-pantry suggestions on unrelated edits.
+  return { ok: true, state: repairSuggestionForMeal(next, id) };
+}
+
+/** Re-pick a view's suggestion ONLY if it points at this meal and the meal
+ * has left that view's pool (deleted, or moved to the other kind). */
+function repairSuggestionForMeal(state: WawetState, mealId: string): WawetState {
+  const { date, shufflesUsed } = state.today;
+  const repair = (kind: MealKind, current: string): string => {
+    if (current !== mealId) return current;
+    const full = fullIds(kind, state.customMeals);
+    if (full.includes(current)) return current;
+    return pick(activeIds(kind, state.pantry, state.customMeals), `${date}:${kind}:${shufflesUsed}`);
+  };
+  const suggestionId = repair("family", state.today.suggestionId);
+  const kidsSuggestionId = repair("kids", state.today.kidsSuggestionId);
+  if (
+    suggestionId === state.today.suggestionId &&
+    kidsSuggestionId === state.today.kidsSuggestionId
+  ) {
+    return state;
+  }
+  return { ...state, today: { ...state.today, suggestionId, kidsSuggestionId } };
+}
+
 export function removeCustomMeal(state: WawetState, id: string): WawetState {
   if (!state.customMeals.some((m) => m.id === id)) return state;
   const next = { ...state, customMeals: state.customMeals.filter((m) => m.id !== id) };
-  // If the removed meal is tonight's suggestion in either view, re-pick for free.
-  return reevaluateSuggestions(next);
+  // If the removed meal is tonight's suggestion in either view, re-pick for
+  // free - and touch nothing else (see repairSuggestionForMeal).
+  return repairSuggestionForMeal(next, id);
 }
 
 export function addCustomIngredient(
@@ -556,7 +618,7 @@ export function addCustomIngredient(
   rawName: string,
   category: Category,
   id: string = generateId(),
-): AddIngredientResult {
+): SaveResult {
   const name = rawName.replace(/[\u0000-\u001f\u007f]/g, "").trim();
   if (name.length === 0) return { ok: false, error: "Give it a name first." };
   if (name.length > MAX_INGREDIENT_NAME_LENGTH) {

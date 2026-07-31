@@ -157,8 +157,11 @@ test.describe("pantry", () => {
     await button.click();
     await expect(page.getByTestId("shuffle-count")).toHaveText("1/3");
     await expect(page.getByTestId("meal-name")).not.toHaveText("Fish and Chips");
-    // The dealt meal came from beyond the eligible pool: the card says so.
+    // The dealt meal came from beyond the eligible pool: the card says so,
+    // and the notice links straight to the pantry.
     await expect(page.getByTestId("fallback-notice")).toBeVisible();
+    await page.getByTestId("fallback-notice").click();
+    await expect(page.getByRole("heading", { name: "What do you have?" })).toBeVisible();
   });
 
   test("adds a custom item via the sheet, persists it, and rejects duplicates", async ({ page }) => {

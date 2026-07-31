@@ -42,6 +42,7 @@ type Gesture = {
 export function useSwipeShuffle(
   enabled: boolean,
   onShuffle: (direction: ShuffleDirection, release: ReleasePose) => void,
+  onRejected?: () => void,
 ) {
   const cardRef = useRef<HTMLElement | null>(null);
   const deckRef = useRef<HTMLElement | null>(null);
@@ -149,9 +150,13 @@ export function useSwipeShuffle(
           rotation: dragRotation(dx),
           progress: dragProgress(dx),
         });
+      } else if (!enabled && Math.abs(dx) > TAP_SLOP) {
+        // A real drag attempt while shuffling is off (3/3 used): tell the
+        // caller so the card can wobble "no" instead of silently ignoring it.
+        onRejected?.();
       }
     },
-    [enabled, endGesture, onShuffle],
+    [enabled, endGesture, onShuffle, onRejected],
   );
 
   const onPointerCancel = useCallback(

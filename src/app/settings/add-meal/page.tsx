@@ -1,7 +1,6 @@
-import { AddMealScreen } from "@/components/add-meal-screen";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default function AddMealPage() {
-  return <AddMealScreen />;
+// The add-meal flow moved to /meals/add; keep old links and history working.
+export default function LegacyAddMealPage() {
+  redirect("/meals/add");
 }

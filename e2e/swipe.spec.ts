@@ -101,6 +101,36 @@ test.describe("mouse swipe (desktop project)", () => {
     await expect(page.getByTestId("meal-name")).toHaveText(capped ?? "");
   });
 
+  test("dragging at the 3/3 cap wobbles the card instead of shuffling", async ({ page }) => {
+    await openToday(page);
+    for (let i = 0; i < 3; i++) await mouseDrag(page, -100);
+    await expect(page.getByTestId("shuffle-count")).toHaveText("3/3");
+    const name = await page.getByTestId("meal-name").textContent();
+    // Drag again: no shuffle, but the card shakes its head (data-wobble is set
+    // while the WAAPI wobble runs; the fake clock holds it until flushed).
+    const card = page.getByTestId("today-card");
+    const box = (await card.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    for (let i = 1; i <= 5; i++) await page.mouse.move(box.x + box.width / 2 - i * 20, box.y + box.height / 2);
+    await page.mouse.up();
+    await expect(card).toHaveAttribute("data-wobble", "true");
+    await page.clock.runFor(600);
+    await expect(card).not.toHaveAttribute("data-wobble", "true");
+    await expect(page.getByTestId("meal-name")).toHaveText(name ?? "");
+    await expect(page.getByTestId("shuffle-count")).toHaveText("3/3");
+  });
+
+  test("under prefers-reduced-motion a capped drag stays quiet (no wobble attr, no crash)", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await openToday(page);
+    for (let i = 0; i < 3; i++) await mouseDrag(page, -100);
+    await expect(page.getByTestId("shuffle-count")).toHaveText("3/3");
+    await mouseDrag(page, -100);
+    await expect(page.getByTestId("today-card")).not.toHaveAttribute("data-wobble", "true");
+    await expect(page.getByTestId("shuffle-count")).toHaveText("3/3");
+  });
+
   test("a drag starting on the nested shuffle button neither swipes nor clicks; a tap still shuffles once", async ({ page }) => {
     await openToday(page);
     const button = page.getByRole("button", { name: /shuffle suggestion/i });
