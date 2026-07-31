@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type MealKind, seededIngredients } from "@/lib/wawet-data";
@@ -30,21 +30,23 @@ export function MealFormScreen({ mealId }: { mealId?: string }) {
   const [ingredients, setIngredients] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [armedDelete, setArmedDelete] = useState(false);
 
   const editing = state && mealId ? state.customMeals.find((m) => m.id === mealId) ?? null : null;
 
-  // Pre-fill once when editing; state arrives after mount.
-  useEffect(() => {
-    if (loaded || !state || !mealId) return;
-    const meal = state.customMeals.find((m) => m.id === mealId);
-    if (meal) {
-      setName(meal.name);
-      setDescription(meal.description);
-      setKind(meal.kind);
-      setIngredients(meal.ingredients);
+  // Prefill via state-adjustment-during-render (the React-endorsed pattern;
+  // an effect here trips react-hooks/set-state-in-effect). Runs once per
+  // mount - the page keys this component by meal id, so a different meal is
+  // a fresh mount with fresh state.
+  if (!loaded && state && mealId) {
+    if (editing) {
+      setName(editing.name);
+      setDescription(editing.description);
+      setKind(editing.kind);
+      setIngredients(editing.ingredients);
     }
     setLoaded(true);
-  }, [loaded, state, mealId]);
+  }
 
   function save() {
     if (!state) return;
@@ -63,6 +65,12 @@ export function MealFormScreen({ mealId }: { mealId?: string }) {
 
   function remove() {
     if (!state || !mealId) return;
+    // Deletion is unrecoverable in a localStorage app: first tap arms,
+    // second tap within the armed state deletes.
+    if (!armedDelete) {
+      setArmedDelete(true);
+      return;
+    }
     setState(removeCustomMeal(state, mealId));
     router.push("/meals");
   }
@@ -104,7 +112,15 @@ export function MealFormScreen({ mealId }: { mealId?: string }) {
           {chevronLeft}
         </Link>
         {mealId ? (
-          <button type="button" aria-label="Delete meal" data-testid="delete-meal" onClick={remove} className="p-1 text-foreground">
+          <button
+            type="button"
+            aria-label={armedDelete ? "Tap again to delete" : "Delete meal"}
+            data-testid="delete-meal"
+            data-armed={armedDelete || undefined}
+            onClick={remove}
+            className={armedDelete ? "flex items-center gap-2 p-1 text-xs font-bold text-[#c0392b]" : "p-1 text-foreground"}
+          >
+            {armedDelete ? "Tap again to delete" : null}
             {trashIcon}
           </button>
         ) : null}

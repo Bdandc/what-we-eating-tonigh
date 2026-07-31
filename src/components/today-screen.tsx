@@ -160,6 +160,9 @@ function TodayCard({
 
   /** The 3/3 "no": a quick shake that says the deck is done for today. */
   function wobble() {
+    // The "no more shuffles" shake belongs to the CAP only; any future
+    // disabled-for-other-reasons state must not borrow it.
+    if (state.today.shufflesUsed < MAX_SHUFFLES) return;
     const el = cardRef.current;
     if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     // One wobble at a time: a fresh rejection restarts the shake, and only

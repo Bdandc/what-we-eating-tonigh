@@ -806,6 +806,16 @@ describe("custom meals", () => {
     expect(removed.today.suggestionId).toBe(offPantryDeal);
   });
 
+  it("updateCustomMeal validates like add: empty name, over-length, sliced description", () => {
+    const s = withMeal("Shopska Salad", "family", []);
+    const id = s.customMeals[0].id;
+    expect(updateCustomMeal(s, id, { name: "   ", kind: "family", ingredients: [] }).ok).toBe(false);
+    expect(updateCustomMeal(s, id, { name: "x".repeat(61), kind: "family", ingredients: [] }).ok).toBe(false);
+    const long = updateCustomMeal(s, id, { name: "Fine", description: "d".repeat(500), kind: "family", ingredients: [] });
+    expect(long.ok).toBe(true);
+    if (long.ok) expect(long.state.customMeals[0].description.length).toBe(200);
+  });
+
   it("updateCustomMeal kind change re-picks a stranded suggestion for free", () => {
     let s = withMeal("Shopska Salad", "family", []);
     const id = s.customMeals[0].id;

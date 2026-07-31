@@ -121,6 +121,16 @@ test.describe("mouse swipe (desktop project)", () => {
     await expect(page.getByTestId("shuffle-count")).toHaveText("3/3");
   });
 
+  test("under prefers-reduced-motion a capped drag stays quiet (no wobble attr, no crash)", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await openToday(page);
+    for (let i = 0; i < 3; i++) await mouseDrag(page, -100);
+    await expect(page.getByTestId("shuffle-count")).toHaveText("3/3");
+    await mouseDrag(page, -100);
+    await expect(page.getByTestId("today-card")).not.toHaveAttribute("data-wobble", "true");
+    await expect(page.getByTestId("shuffle-count")).toHaveText("3/3");
+  });
+
   test("a drag starting on the nested shuffle button neither swipes nor clicks; a tap still shuffles once", async ({ page }) => {
     await openToday(page);
     const button = page.getByRole("button", { name: /shuffle suggestion/i });

@@ -8,5 +8,5 @@ export default async function EditMealPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <MealFormScreen mealId={id} />;
+  return <MealFormScreen key={id} mealId={id} />;
 }

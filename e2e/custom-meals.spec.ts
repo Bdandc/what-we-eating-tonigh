@@ -72,7 +72,16 @@ test("add a custom meal via My Meals, it persists, appears on the card when sugg
   await page.getByRole("link", { name: /Settings/ }).click();
   await page.getByTestId("view-meals").click();
   await page.getByText("Shopska Salad").click();
+  // Two-tap confirm: first arms, second deletes.
+  await page.getByTestId("delete-meal").click();
+  await expect(page.getByTestId("delete-meal")).toHaveAttribute("data-armed", "true");
   await page.getByTestId("delete-meal").click();
   await expect(page.getByRole("heading", { name: "My Meals" })).toBeVisible();
   await expect(page.getByTestId("no-meals")).toBeVisible();
+});
+
+test("the legacy /settings/add-meal route redirects to /meals/add", async ({ page }) => {
+  await page.goto("/settings/add-meal");
+  await page.waitForURL("**/meals/add");
+  await expect(page.getByRole("heading", { name: "Add meal" })).toBeVisible();
 });

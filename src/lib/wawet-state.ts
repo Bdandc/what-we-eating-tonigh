@@ -487,9 +487,12 @@ export function applyPantryOverrides(
   return commitPantry({ ...state, pantry });
 }
 
-export type AddIngredientResult =
+export type SaveResult =
   | { ok: true; state: WawetState }
   | { ok: false; error: string };
+
+/** @deprecated old name kept for callers; same shape as SaveResult. */
+export type AddIngredientResult = SaveResult;
 
 export function generateId(): string {
   return `c-${crypto.randomUUID()}`;
@@ -510,7 +513,7 @@ export function addCustomMeal(
   state: WawetState,
   input: AddMealInput,
   id: string = generateMealId(),
-): AddIngredientResult {
+): SaveResult {
   const name = stripControl(input.name);
   if (name.length === 0) return { ok: false, error: "Give it a name first." };
   if (name.length > MAX_INGREDIENT_NAME_LENGTH) {
@@ -548,7 +551,7 @@ export function updateCustomMeal(
   state: WawetState,
   id: string,
   input: AddMealInput,
-): AddIngredientResult {
+): SaveResult {
   const existing = state.customMeals.find((m) => m.id === id);
   if (!existing) return { ok: false, error: "That meal no longer exists." };
   const name = stripControl(input.name);
@@ -615,7 +618,7 @@ export function addCustomIngredient(
   rawName: string,
   category: Category,
   id: string = generateId(),
-): AddIngredientResult {
+): SaveResult {
   const name = rawName.replace(/[\u0000-\u001f\u007f]/g, "").trim();
   if (name.length === 0) return { ok: false, error: "Give it a name first." };
   if (name.length > MAX_INGREDIENT_NAME_LENGTH) {
