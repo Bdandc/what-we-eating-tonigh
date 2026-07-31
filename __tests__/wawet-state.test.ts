@@ -713,13 +713,31 @@ describe("custom meals", () => {
     }
   });
 
-  it("re-seeds starters into a parsed state whose meal list is empty, and only then", () => {
-    const emptied = JSON.stringify({ ...base, customMeals: [] });
-    const back = parseState(emptied, THURSDAY2);
-    expect(back.customMeals.map((m) => m.name)).toEqual(starterMeals.map((m) => m.name));
+  it("merges starters ONCE into any unseeded install, alongside the user's own meals", () => {
+    // An existing install (no marker) with its own meal: starters join it.
+    const jerk = { id: generateMealId(), name: "Jerk chicken", description: "", kind: "family", ingredients: [] };
+    const legacy = JSON.stringify({ ...base, startersSeeded: undefined, customMeals: [jerk] });
+    const back = parseState(legacy, THURSDAY2);
+    expect(back.customMeals.map((m) => m.name)).toEqual(["Jerk chicken", ...starterMeals.map((m) => m.name)]);
+    expect(back.startersSeeded).toBe(true);
 
-    const oneLeft = JSON.stringify({ ...base, customMeals: [base.customMeals[0]] });
-    expect(parseState(oneLeft, THURSDAY2).customMeals).toHaveLength(1);
+    // Once seeded, deletions stick: no zombie starters.
+    const afterDelete = JSON.stringify({
+      ...back,
+      customMeals: back.customMeals.filter((m) => m.name !== "Full English"),
+    });
+    const reparsed = parseState(afterDelete, THURSDAY2);
+    expect(reparsed.customMeals.some((m) => m.name === "Full English")).toBe(false);
+
+    // A user meal already holding a starter's name wins; only that one skips.
+    const clash = JSON.stringify({
+      ...base,
+      startersSeeded: undefined,
+      customMeals: [{ id: generateMealId(), name: "full english", description: "mine", kind: "kids", ingredients: [] }],
+    });
+    const merged = parseState(clash, THURSDAY2);
+    expect(merged.customMeals.filter((m) => m.name.toLowerCase() === "full english")).toHaveLength(1);
+    expect(merged.customMeals.some((m) => m.name === "Burger and Chips")).toBe(true);
   });
 
   it("joins only its own kind's pool with an opaque m- id", () => {
