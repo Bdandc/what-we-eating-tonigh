@@ -60,11 +60,59 @@ dialog::backdrop {
   background: rgba(2, 44, 25, 0.35);
 }
 
+/* Card deck. The suggestion sits on two ghost cards. A shuffle throws the top
+   card off in the direction of travel while the next one rises from the
+   ghost-1 position, so it reads as dealing rather than cross-fading. The ghost
+   offsets and the keyframes share --deck-lift / --deck-scale on purpose:
+   change them once and the whole motion stays consistent. */
+
+:root {
+  --deck-lift: 10px;
+  --deck-scale: 0.965;
+  --deck-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.card-deck {
+  position: relative;
+}
+
+.card-ghost {
+  position: absolute;
+  inset: 0;
+  border-radius: 1rem;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(2, 44, 25, 0.06);
+}
+
+.card-ghost-1 {
+  transform: translateY(var(--deck-lift)) scale(var(--deck-scale));
+  opacity: 0.55;
+}
+
+.card-ghost-2 {
+  transform: translateY(calc(var(--deck-lift) * 2)) scale(calc(var(--deck-scale) - 0.035));
+  opacity: 0.3;
+}
+
+.card-live {
+  position: relative;
+  z-index: 10;
+}
+
+.card-out {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: no-preference) {
-  @keyframes wawet-meal-in {
+  /* Starts exactly where ghost-1 sits, so the next card looks promoted to the
+     top of the deck rather than faded in. */
+  @keyframes wawet-card-in {
     from {
-      opacity: 0;
-      transform: translateX(12px);
+      opacity: 0.55;
+      transform: translateY(var(--deck-lift)) scale(var(--deck-scale));
     }
     to {
       opacity: 1;
@@ -72,7 +120,43 @@ dialog::backdrop {
     }
   }
 
-  .meal-in {
-    animation: wawet-meal-in 160ms ease-out;
+  @keyframes wawet-card-out-left {
+    from {
+      opacity: 1;
+      transform: none;
+    }
+    to {
+      opacity: 0;
+      transform: translateX(-115%) rotate(-11deg);
+    }
+  }
+
+  @keyframes wawet-card-out-right {
+    from {
+      opacity: 1;
+      transform: none;
+    }
+    to {
+      opacity: 0;
+      transform: translateX(115%) rotate(11deg);
+    }
+  }
+
+  /* Transition covers the snap-back when a drag ends below the shuffle
+     threshold; the swipe hook clears it for the duration of the drag. */
+  /* No fill-mode on purpose: a filled animation retains transform:none and
+     outranks the inline transform the drag writes, freezing the card. The
+     final keyframe already matches the base style, so there is no jump. */
+  .card-live {
+    animation: wawet-card-in 380ms var(--deck-ease);
+    transition: transform 220ms var(--deck-ease);
+  }
+
+  .card-out-left {
+    animation: wawet-card-out-left 320ms var(--deck-ease) forwards;
+  }
+
+  .card-out-right {
+    animation: wawet-card-out-right 320ms var(--deck-ease) forwards;
   }
 }

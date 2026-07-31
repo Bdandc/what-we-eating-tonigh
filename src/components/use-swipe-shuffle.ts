@@ -3,6 +3,8 @@
 import { useCallback, useRef } from "react";
 import { TAP_SLOP, dragOffset, evaluateSwipe } from "@/lib/swipe";
 
+export type ShuffleDirection = "left" | "right";
+
 type Gesture = {
   pointerId: number;
   startX: number;
@@ -19,7 +21,10 @@ type Gesture = {
  * lostpointercapture, click suppression cleared on the next pointerdown and
  * by timeout. No transform at all under prefers-reduced-motion.
  */
-export function useSwipeShuffle(enabled: boolean, onShuffle: () => void) {
+export function useSwipeShuffle(
+  enabled: boolean,
+  onShuffle: (direction: ShuffleDirection) => void,
+) {
   const cardRef = useRef<HTMLElement | null>(null);
   const gesture = useRef<Gesture | null>(null);
   const suppressClick = useRef(false);
@@ -30,6 +35,9 @@ export function useSwipeShuffle(enabled: boolean, onShuffle: () => void) {
     if (g?.raf) cancelAnimationFrame(g.raf);
     const el = cardRef.current;
     if (el) {
+      // Hand the transform back to CSS so the card eases home instead of
+      // teleporting when a drag ends below the shuffle threshold.
+      el.style.transition = "";
       el.style.transform = "";
       el.style.userSelect = "";
       el.style.webkitUserSelect = "";
@@ -66,6 +74,8 @@ export function useSwipeShuffle(enabled: boolean, onShuffle: () => void) {
       raf: 0,
     };
     el.setPointerCapture(event.pointerId);
+    // The drag drives transform directly per frame; a transition would lag it.
+    el.style.transition = "none";
     el.style.userSelect = "none";
     el.style.webkitUserSelect = "none";
   }, []);
@@ -82,7 +92,11 @@ export function useSwipeShuffle(enabled: boolean, onShuffle: () => void) {
         g.raf = requestAnimationFrame(() => {
           const current = gesture.current;
           const el = cardRef.current;
-          if (current && el) el.style.transform = `translateX(${dragOffset(current.dx)}px)`;
+          if (current && el) {
+            const offset = dragOffset(current.dx);
+            // Small tilt proportional to travel: the card pivots as it lifts.
+            el.style.transform = `translateX(${offset}px) rotate(${offset * 0.05}deg)`;
+          }
           if (current) current.raf = 0;
         });
       }
@@ -103,7 +117,9 @@ export function useSwipeShuffle(enabled: boolean, onShuffle: () => void) {
         }, 300);
       }
       endGesture(event);
-      if (enabled && evaluateSwipe(dx, dy) === "shuffle") onShuffle();
+      if (enabled && evaluateSwipe(dx, dy) === "shuffle") {
+        onShuffle(dx < 0 ? "left" : "right");
+      }
     },
     [enabled, endGesture, onShuffle],
   );

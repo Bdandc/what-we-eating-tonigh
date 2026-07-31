@@ -7,6 +7,7 @@ import {
   canShuffle,
   isFallback,
   isTakeawayToday,
+  peekNextSuggestion,
   resolveMeal,
   restoreTakeaway,
   setView,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/wawet-state";
 import { useWawet } from "@/components/use-wawet";
 import { useSwipeShuffle } from "@/components/use-swipe-shuffle";
+import { useCardDeck } from "@/components/use-card-deck";
 
 const gearIcon = (
   <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
@@ -107,9 +109,12 @@ function TodayCard({
   );
   const shuffleDisabled = !canShuffle(state);
   const fallback = isFallback(view, state.pantry, state.customMeals);
-  const { setCard, handlers: swipeHandlers } = useSwipeShuffle(!shuffleDisabled, () =>
-    setState((s) => (s ? shuffle(s) : s)),
-  );
+  const nextMeal = peekNextSuggestion(state);
+  const { outgoing, setDirection, clearOutgoing } = useCardDeck(meal);
+  const { setCard, handlers: swipeHandlers } = useSwipeShuffle(!shuffleDisabled, (direction) => {
+    setDirection(direction);
+    setState((s) => (s ? shuffle(s) : s));
+  });
 
   if (takeawayActive) {
     return (
@@ -139,40 +144,87 @@ function TodayCard({
 
   return (
     <section className="mt-16">
-      <article
-        ref={setCard}
-        {...swipeHandlers}
-        data-testid="today-card"
-        data-variant="normal"
-        className="flex min-h-72 touch-pan-y flex-col rounded-2xl bg-surface p-6 text-foreground shadow-sm"
-      >
-        <div className="flex justify-end">
-          <button
-            type="button"
-            disabled={shuffleDisabled}
-            onClick={() => setState((s) => (s ? shuffle(s) : s))}
-            className="flex items-center gap-1.5 text-xs font-bold disabled:text-muted"
-            aria-label={shuffleDisabled ? "No shuffles left today" : "Shuffle suggestion"}
+      <div className="card-deck">
+        <div aria-hidden className="card-ghost card-ghost-2" />
+        {nextMeal ? (
+          <article
+            aria-hidden
+            className="card-ghost card-ghost-1 flex flex-col overflow-hidden p-6 text-foreground"
           >
-            {swapIcon}
-            Shuffle
-            <span data-testid="shuffle-count" className="ml-0.5">
-              {state.today.shufflesUsed}/{MAX_SHUFFLES}
-            </span>
-          </button>
-        </div>
-        <div key={meal?.id ?? "none"} className="meal-in flex flex-1 flex-col justify-center">
-          <h2 data-testid="meal-name" className="text-[32px] font-bold leading-10">
-            {meal?.name ?? "Dinner"}
-          </h2>
-          <p className="mt-4 text-xs leading-5 text-muted">{meal?.description}</p>
-          {fallback ? (
-            <p data-testid="fallback-notice" className="mt-3 text-xs text-muted">
-              Nothing matches your pantry. Showing everything.
-            </p>
-          ) : null}
-        </div>
-      </article>
+            <div className="flex justify-end">
+              <span className="flex items-center gap-1.5 text-xs font-bold">
+                {swapIcon}
+                Shuffle
+              </span>
+            </div>
+            <div className="flex flex-1 flex-col justify-center">
+              <h2 className="text-[32px] font-bold leading-10">{nextMeal.name}</h2>
+              <p className="mt-4 text-xs leading-5 text-muted">{nextMeal.description}</p>
+            </div>
+          </article>
+        ) : (
+          <div aria-hidden className="card-ghost card-ghost-1" />
+        )}
+
+        {outgoing ? (
+          <article
+            key={outgoing.seq}
+            aria-hidden
+            onAnimationEnd={clearOutgoing}
+            className={`card-out card-out-${outgoing.direction} flex min-h-72 flex-col rounded-2xl bg-surface p-6 text-foreground shadow-sm`}
+          >
+            <div className="flex justify-end">
+              <span className="flex items-center gap-1.5 text-xs font-bold">
+                {swapIcon}
+                Shuffle
+              </span>
+            </div>
+            <div className="flex flex-1 flex-col justify-center">
+              <h2 className="text-[32px] font-bold leading-10">{outgoing.item.name}</h2>
+              <p className="mt-4 text-xs leading-5 text-muted">{outgoing.item.description}</p>
+            </div>
+          </article>
+        ) : null}
+
+        <article
+          key={meal?.id ?? "none"}
+          ref={setCard}
+          {...swipeHandlers}
+          data-testid="today-card"
+          data-variant="normal"
+          className="card-live flex min-h-72 touch-pan-y flex-col rounded-2xl bg-surface p-6 text-foreground shadow-sm"
+        >
+          <div className="flex justify-end">
+            <button
+              type="button"
+              disabled={shuffleDisabled}
+              onClick={() => {
+                setDirection("left");
+                setState((s) => (s ? shuffle(s) : s));
+              }}
+              className="flex items-center gap-1.5 text-xs font-bold disabled:text-muted"
+              aria-label={shuffleDisabled ? "No shuffles left today" : "Shuffle suggestion"}
+            >
+              {swapIcon}
+              Shuffle
+              <span data-testid="shuffle-count" className="ml-0.5">
+                {state.today.shufflesUsed}/{MAX_SHUFFLES}
+              </span>
+            </button>
+          </div>
+          <div className="flex flex-1 flex-col justify-center">
+            <h2 data-testid="meal-name" className="text-[32px] font-bold leading-10">
+              {meal?.name ?? "Dinner"}
+            </h2>
+            <p className="mt-4 text-xs leading-5 text-muted">{meal?.description}</p>
+            {fallback ? (
+              <p data-testid="fallback-notice" className="mt-3 text-xs text-muted">
+                Nothing matches your pantry. Showing everything.
+              </p>
+            ) : null}
+          </div>
+        </article>
+      </div>
 
       <div className="mt-6 flex items-center gap-3">
         {state.settings.kidsEnabled ? (

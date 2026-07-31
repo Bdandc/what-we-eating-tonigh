@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  LIKELY_STOCKED,
   familyMeals,
   kidsMeals,
   meals,
@@ -36,6 +37,8 @@ import {
   setView,
   shuffle,
   skipTakeaway,
+  commitPantry,
+  peekNextSuggestion,
   togglePantry,
   todayLocalDate,
   weekdayName,
@@ -68,9 +71,30 @@ describe("wawet-data invariants", () => {
     }
   });
 
-  it("each pool has at least one unmapped meal, so fallback mode is unreachable with seed data (never a dead end)", () => {
-    expect(familyMeals.some((m) => m.ingredients.length === 0)).toBe(true);
-    expect(kidsMeals.some((m) => m.ingredients.length === 0)).toBe(true);
+  it("every seeded meal names a hero item, so the pantry always has an effect", () => {
+    expect(meals.every((m) => m.ingredients.length > 0)).toBe(true);
+  });
+
+  it("no pantry item is a dead tick: every one is needed by some meal", () => {
+    const used = new Set(meals.flatMap((m) => m.ingredients));
+    const orphans = seededIngredients.filter((i) => !used.has(i.id)).map((i) => i.name);
+    expect(orphans).toEqual([]);
+  });
+
+  it("no meal needs an ingredient that does not exist", () => {
+    const known = new Set(seededIngredients.map((i) => i.id));
+    const dangling = meals.flatMap((m) => m.ingredients).filter((id) => !known.has(id));
+    expect(dangling).toEqual([]);
+  });
+
+  it("the pre-filled staples exist and cover at least two meals per pool", () => {
+    const known = new Set(seededIngredients.map((i) => i.id));
+    for (const id of LIKELY_STOCKED) expect(known.has(id)).toBe(true);
+    const likely = new Set(LIKELY_STOCKED);
+    const covered = (pool: typeof meals) =>
+      pool.filter((m) => m.ingredients.every((i) => likely.has(i))).length;
+    expect(covered(familyMeals)).toBeGreaterThanOrEqual(2);
+    expect(covered(kidsMeals)).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -115,7 +139,10 @@ describe("freshState defaults", () => {
     expect(s.today.takeawaySkipped).toBe(false);
     expect(s.today.date).toBe("2026-07-30");
     expect(s.customIngredients).toEqual([]);
-    for (const ing of seededIngredients) expect(s.pantry[ing.id]).toBe(true);
+    const likely = new Set(LIKELY_STOCKED);
+    for (const ing of seededIngredients) {
+      expect(s.pantry[ing.id]).toBe(likely.has(ing.id));
+    }
   });
 
   it("daily picks are deterministic per date and come from the right pools", () => {
@@ -167,29 +194,93 @@ describe("shuffle", () => {
   });
 });
 
-describe("pantry filter + invalidation", () => {
-  it("marking an ingredient as don't-have removes dependent meals from eligibility", () => {
-    const s = freshState(THURSDAY);
-    const withoutChicken = togglePantry(s, "chicken");
-    const ids = eligibleIds("family", withoutChicken.pantry);
-    expect(ids).not.toContain("butter-chicken");
-    expect(ids).not.toContain("caesar-salad");
-    expect(ids).not.toContain("fajita-night");
-    expect(ids).toContain("spaghetti-night");
+/** Tick every seeded ingredient, mirroring a user selecting the whole pantry. */
+function selectAll(state: WawetState): WawetState {
+  let out = state;
+  for (const ing of seededIngredients) {
+    if (out.pantry[ing.id] !== true) out = togglePantry(out, ing.id);
+  }
+  return out;
+}
+
+/** Untick everything, giving a genuinely empty pantry. */
+function deselectAll(state: WawetState): WawetState {
+  let out = state;
+  for (const ing of seededIngredients) {
+    if (out.pantry[ing.id] === true) out = togglePantry(out, ing.id);
+  }
+  return out;
+}
+
+describe("peekNextSuggestion", () => {
+  it("always shows exactly the card the next shuffle deals", () => {
+    let s = selectAll(freshState(THURSDAY));
+    for (let n = 0; n < MAX_SHUFFLES; n++) {
+      const peeked = peekNextSuggestion(s);
+      s = shuffle(s);
+      expect(peeked?.id).toBe(currentId(s));
+    }
   });
 
-  it("meals with no mapping stay eligible whatever the pantry says", () => {
-    let s = freshState(THURSDAY);
-    for (const ing of seededIngredients) {
-      if (s.pantry[ing.id]) s = togglePantry(s, ing.id);
-    }
-    const ids = eligibleIds("family", s.pantry);
-    expect(ids).toContain("spaghetti-night");
-    expect(isFallback("family", s.pantry)).toBe(false);
+  it("is null once shuffles are exhausted", () => {
+    let s = selectAll(freshState(THURSDAY));
+    for (let n = 0; n < MAX_SHUFFLES; n++) s = shuffle(s);
+    expect(peekNextSuggestion(s)).toBeNull();
+  });
+
+  it("peeks the kids pool when the kids view is active", () => {
+    let s = selectAll(freshState(THURSDAY));
+    s = setView(s, "kids");
+    const peeked = peekNextSuggestion(s);
+    expect(peeked).not.toBeNull();
+    s = shuffle(s);
+    expect(peeked?.id).toBe(s.today.kidsSuggestionId);
+  });
+});
+
+describe("pantry filter + invalidation", () => {
+  it("only meals whose ingredients are all selected are eligible", () => {
+    const all = selectAll(freshState(THURSDAY));
+    const everything = eligibleIds("family", all.pantry);
+    expect([...everything].sort()).toEqual(familyMeals.map((m) => m.id).sort());
+
+    const withoutChicken = commitPantry(togglePantry(all, "chicken"));
+    const ids = eligibleIds("family", withoutChicken.pantry);
+    const chickenMeals = familyMeals.filter((m) => m.ingredients.includes("chicken"));
+    expect(chickenMeals.length).toBeGreaterThan(0);
+    for (const meal of chickenMeals) expect(ids).not.toContain(meal.id);
+    // Meals that never needed chicken are untouched.
+    expect(ids).toContain("pizza-night");
+  });
+
+  it("an empty pantry is fallback mode, and still suggests from the full pool", () => {
+    const s = deselectAll(freshState(THURSDAY));
+    expect(eligibleIds("family", s.pantry)).toEqual([]);
+    expect(isFallback("family", s.pantry)).toBe(true);
+    // Never a dead end: repairing a dangling id against an empty pantry still
+    // resolves to a real meal from the full pool.
+    const raw = JSON.stringify({ ...s, today: { ...s.today, suggestionId: "deleted-meal" } });
+    const repaired = parseState(raw, THURSDAY);
+    expect(familyMeals.some((m) => m.id === repaired.today.suggestionId)).toBe(true);
+  });
+
+  it("a full pantry leaves fallback mode", () => {
+    const all = selectAll(freshState(THURSDAY));
+    expect(isFallback("family", all.pantry)).toBe(false);
+    expect(isFallback("kids", all.pantry)).toBe(false);
+  });
+
+  it("selecting an ingredient does not move the dish until it is committed", () => {
+    const all = selectAll(freshState(THURSDAY));
+    const mapped = familyMeals.find((m) => m.ingredients.length > 0)!;
+    const s = { ...all, today: { ...all.today, suggestionId: mapped.id } };
+    const toggled = togglePantry(s, mapped.ingredients[0]);
+    expect(toggled.today.suggestionId).toBe(mapped.id);
+    expect(commitPantry(toggled).today.suggestionId).not.toBe(mapped.id);
   });
 
   it("re-picks the current suggestion for free when it becomes ineligible, in both views", () => {
-    let s = freshState(THURSDAY);
+    let s = selectAll(freshState(THURSDAY));
     // Force a known current: find an ingredient the family suggestion depends on,
     // or force one by shuffling to a mapped meal via direct construction.
     const mapped = familyMeals.find((m) => m.ingredients.length > 0)!;
@@ -198,15 +289,15 @@ describe("pantry filter + invalidation", () => {
       today: { ...s.today, suggestionId: mapped.id },
     };
     const shufflesBefore = s.today.shufflesUsed;
-    const toggled = togglePantry(s, mapped.ingredients[0]);
+    const toggled = commitPantry(togglePantry(s, mapped.ingredients[0]));
     expect(toggled.today.suggestionId).not.toBe(mapped.id);
     expect(toggled.today.shufflesUsed).toBe(shufflesBefore);
     expect(eligibleIds("family", toggled.pantry)).toContain(toggled.today.suggestionId);
 
     const mappedKids = kidsMeals.find((m) => m.ingredients.length > 0)!;
-    let k = freshState(THURSDAY);
+    let k = selectAll(freshState(THURSDAY));
     k = { ...k, today: { ...k.today, kidsSuggestionId: mappedKids.id } };
-    const kToggled = togglePantry(k, mappedKids.ingredients[0]);
+    const kToggled = commitPantry(togglePantry(k, mappedKids.ingredients[0]));
     expect(kToggled.today.kidsSuggestionId).not.toBe(mappedKids.id);
   });
 
@@ -343,15 +434,19 @@ describe("parseState (untrusted input)", () => {
     expect(familyMeals.some((m) => m.id === s.today.suggestionId)).toBe(true);
   });
 
-  it("re-picks a persisted suggestion that the pantry now excludes", () => {
+  it("keeps a persisted suggestion the pantry excludes (drafts never re-pick on load)", () => {
     const mapped = familyMeals.find((m) => m.ingredients.length > 0)!;
+    const full: Record<string, boolean> = {};
+    for (const id of Object.keys(fresh.pantry)) full[id] = true;
     const raw = JSON.stringify({
       ...fresh,
-      pantry: { ...fresh.pantry, [mapped.ingredients[0]]: false },
+      pantry: { ...full, [mapped.ingredients[0]]: false },
       today: { ...fresh.today, suggestionId: mapped.id },
     });
     const s = parseState(raw, THURSDAY);
-    expect(s.today.suggestionId).not.toBe(mapped.id);
+    expect(s.today.suggestionId).toBe(mapped.id);
+    // Committing the pantry is what re-picks it.
+    expect(commitPantry(s).today.suggestionId).not.toBe(mapped.id);
   });
 
   it("forces family view when kids are disabled", () => {
@@ -398,7 +493,8 @@ describe("parseState (untrusted input)", () => {
     expect(s.customIngredients).toEqual([
       { id: goodId, name: "Halloumi", category: "protein" },
     ]);
-    expect(s.pantry[goodId]).toBe(true);
+    // No pantry entry persisted for it, so it comes back unselected.
+    expect(s.pantry[goodId]).toBe(false);
   });
 
   it("rolls over a state persisted on an earlier date", () => {
@@ -538,7 +634,7 @@ describe("custom meals", () => {
   });
 
   it("a custom ingredient gates a custom meal through the pantry filter", () => {
-    const ing = addCustomIngredient(base, "Halloumi", "protein");
+    const ing = addCustomIngredient(selectAll(base), "Halloumi", "protein");
     if (!ing.ok) throw new Error("setup");
     const halloumiId = ing.state.customIngredients[0].id;
     const meal = addCustomMeal(ing.state, { name: "Halloumi Bake", kind: "family", ingredients: [halloumiId] });
@@ -547,7 +643,7 @@ describe("custom meals", () => {
     const mealId = s.customMeals[0].id;
     expect(eligibleIds("family", s.pantry, s.customMeals)).toContain(mealId);
     s = { ...s, today: { ...s.today, suggestionId: mealId } };
-    const toggled = togglePantry(s, halloumiId);
+    const toggled = commitPantry(togglePantry(s, halloumiId));
     expect(eligibleIds("family", toggled.pantry, toggled.customMeals)).not.toContain(mealId);
     expect(toggled.today.suggestionId).not.toBe(mealId);
     expect(toggled.today.shufflesUsed).toBe(s.today.shufflesUsed);
