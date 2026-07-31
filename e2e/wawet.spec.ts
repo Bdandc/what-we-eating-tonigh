@@ -139,6 +139,28 @@ test.describe("pantry", () => {
     await expect(page.getByTestId(`chip-${meal.ingredients[0]}`)).toHaveAttribute("aria-pressed", "true");
   });
 
+  test("a pantry that matches only one family meal still shuffles (extended deal + notice)", async ({ page }) => {
+    const state = freshState(THURSDAY);
+    for (const id of Object.keys(state.pantry)) state.pantry[id] = false;
+    for (const id of ["fish", "chips", "garden-peas"]) state.pantry[id] = true;
+    state.today.suggestionId = "fish-and-chips";
+    await page.clock.install({ time: THURSDAY });
+    await page.addInitScript(
+      (value) => window.localStorage.setItem("wawet-state-v1", value),
+      JSON.stringify(state),
+    );
+    await page.goto("/");
+    await expect(page.getByTestId("meal-name")).toHaveText("Fish and Chips");
+    await expect(page.getByTestId("fallback-notice")).toHaveCount(0);
+    const button = page.getByRole("button", { name: /shuffle suggestion/i });
+    await expect(button).toBeEnabled();
+    await button.click();
+    await expect(page.getByTestId("shuffle-count")).toHaveText("1/3");
+    await expect(page.getByTestId("meal-name")).not.toHaveText("Fish and Chips");
+    // The dealt meal came from beyond the eligible pool: the card says so.
+    await expect(page.getByTestId("fallback-notice")).toBeVisible();
+  });
+
   test("adds a custom item via the sheet, persists it, and rejects duplicates", async ({ page }) => {
     await openAt(page, THURSDAY, "/pantry");
     await page.getByTestId("add-item").click();

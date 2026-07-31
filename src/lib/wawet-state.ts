@@ -250,9 +250,18 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
 
   // Pantry: allowlist-first rebuild — iterate known ids, never parsed keys.
   const rawPantry = isRecord(parsed.pantry) ? parsed.pantry : {};
+  // Migration: a state written before the catalogue rebuild carries ticks for
+  // since-removed ids and none for the new staples, stranding users in
+  // strange, sparse pools. Detect it by the removed ids and tick the staples
+  // in, exactly like a first run would.
+  const LEGACY_REMOVED = ["cheese-sticks", "sweet-potato-fries", "breaded-mushrooms", "pizza-pockets"];
+  const isLegacyState = LEGACY_REMOVED.some((id) =>
+    Object.prototype.hasOwnProperty.call(rawPantry, id),
+  );
+  const staples = new Set(isLegacyState ? LIKELY_STOCKED : []);
   const pantry: Record<string, boolean> = Object.create(null);
   for (const ing of seededIngredients) {
-    pantry[ing.id] = rawPantry[ing.id] === true;
+    pantry[ing.id] = rawPantry[ing.id] === true || staples.has(ing.id);
   }
   for (const ing of customIngredients) {
     pantry[ing.id] = rawPantry[ing.id] === true;
@@ -358,8 +367,19 @@ export function rolloverIfNeeded(state: WawetState, now: Date = new Date()): Waw
 
 export function canShuffle(state: WawetState): boolean {
   if (state.today.shufflesUsed >= MAX_SHUFFLES) return false;
-  const active = activeIds(state.today.view, state.pantry, state.customMeals);
-  return active.length > 1;
+  // The shuffle can ALWAYS deal as long as the view's full pool has another
+  // card: when the pantry narrows the eligible pool to one (or zero) meals,
+  // the deal extends past it rather than dying with no explanation. The card
+  // itself says when a dealt meal does not match the pantry.
+  return fullIds(state.today.view, state.customMeals).length > 1;
+}
+
+/** Does this meal's every hero ingredient hold a tick right now? */
+export function mealMatchesPantry(
+  pantry: Record<string, boolean>,
+  meal: { ingredients: string[] },
+): boolean {
+  return meal.ingredients.every((ing) => pantry[ing] === true);
 }
 
 /** The id the next shuffle will deal, or null when no shuffle is possible.
@@ -370,8 +390,14 @@ function nextShuffleId(state: WawetState): string | null {
   const { view, date } = state.today;
   const n = state.today.shufflesUsed + 1;
   const current = view === "family" ? state.today.suggestionId : state.today.kidsSuggestionId;
-  const poolMinusCurrent = activeIds(view, state.pantry, state.customMeals).filter((id) => id !== current);
-  return pick(poolMinusCurrent, `${date}:${view}:${n}`);
+  // Deal from the pantry-matched pool first; when that leaves nothing to deal
+  // (eligible is empty OR exactly the current card), extend to the full pool
+  // so the deck never goes dead mid-day.
+  let pool = eligibleIds(view, state.pantry, state.customMeals).filter((id) => id !== current);
+  if (pool.length === 0) {
+    pool = fullIds(view, state.customMeals).filter((id) => id !== current);
+  }
+  return pick(pool, `${date}:${view}:${n}`);
 }
 
 export function peekNextSuggestion(state: WawetState) {

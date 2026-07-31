@@ -5,8 +5,8 @@ import Link from "next/link";
 import {
   MAX_SHUFFLES,
   canShuffle,
-  isFallback,
   isTakeawayToday,
+  mealMatchesPantry,
   peekNextSuggestion,
   resolveMeal,
   restoreTakeaway,
@@ -113,7 +113,10 @@ function TodayCard({
     view === "family" ? state.today.suggestionId : state.today.kidsSuggestionId,
   );
   const shuffleDisabled = !canShuffle(state);
-  const fallback = isFallback(view, state.pantry, state.customMeals);
+  // The notice belongs to the CARD, not the pool: it shows whenever the dealt
+  // meal itself does not match the pantry (empty eligible pool, a deal that
+  // extended past a one-meal pool, or a migrated state).
+  const offPantry = meal ? !mealMatchesPantry(state.pantry, meal) : false;
   const nextMeal = peekNextSuggestion(state);
   const { outgoing, throwCard, clearOutgoing } = useCardDeck<NonNullable<typeof meal>>();
   const { setCard, setDeck, cardRef, handlers: swipeHandlers } = useSwipeShuffle(
@@ -245,9 +248,9 @@ function TodayCard({
               {meal?.name ?? "Dinner"}
             </h2>
             <p className="mt-4 text-xs leading-5 text-muted">{meal?.description}</p>
-            {fallback ? (
+            {offPantry ? (
               <p data-testid="fallback-notice" className="mt-3 text-xs text-muted">
-                Nothing matches your pantry. Showing everything.
+                Not everything for this is in your pantry.
               </p>
             ) : null}
           </div>
