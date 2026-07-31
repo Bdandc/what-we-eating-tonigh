@@ -102,6 +102,7 @@ export const seededIngredients: Ingredient[] = [
   { id: "tinned-tomatoes", name: "Tinned tomatoes", category: "misc" },
   { id: "baked-beans", name: "Baked beans", category: "misc" },
   { id: "coconut-milk", name: "Coconut milk", category: "misc" },
+  { id: "feta", name: "Feta", category: "misc" },
   { id: "mini-pizza", name: "Mini pizza bases", category: "misc" },
 ];
 
@@ -156,9 +157,9 @@ export const meals: Meal[] = [
   { id: "toad-in-the-hole", name: "Toad in the Hole", description: "Sausages in a tall, crisp batter. Gravy is not optional.", kind: "family", ingredients: ["sausages", "eggs"] },
   { id: "sausage-pasta-bake", name: "Sausage Pasta Bake", description: "Sausage meat, tomato sauce, and baked pasta with a crisp top.", kind: "family", ingredients: ["sausages", "pasta", "tinned-tomatoes"] },
   { id: "carbonara", name: "Carbonara", description: "Eggs, bacon, black pepper. No cream, no arguments.", kind: "family", ingredients: ["bacon", "pasta", "eggs"] },
-  { id: "breakfast-for-dinner", name: "Breakfast for Dinner", description: "Bacon, eggs, beans, and toast. Perfectly acceptable at 7pm.", kind: "family", ingredients: ["bacon", "eggs", "baked-beans"] },
+  { id: "breakfast-for-dinner", name: "Breakfast for Dinner", description: "Bacon, eggs, and beans. Perfectly acceptable at 7pm.", kind: "family", ingredients: ["bacon", "eggs", "baked-beans"] },
   { id: "broccoli-bacon-pasta", name: "Broccoli and Bacon Pasta", description: "Salty bacon, soft broccoli, and a glossy pan sauce.", kind: "family", ingredients: ["bacon", "broccoli", "pasta"] },
-  { id: "blt", name: "BLT Night", description: "Crisp bacon, cold lettuce, thick bread. Stack them high.", kind: "family", ingredients: ["bacon", "bread", "lettuce"] },
+  { id: "blt", name: "BLT Night", description: "Crisp bacon, cold lettuce, tomato, thick bread. Stack them high.", kind: "family", ingredients: ["bacon", "bread", "tomato"] },
   { id: "pork-chops", name: "Pork Chops", description: "Pan-fried chops with apple sauce and crushed potatoes.", kind: "family", ingredients: ["pork", "potatoes"] },
   { id: "sweet-sour-pork", name: "Sweet and Sour Pork", description: "Sticky pork with peppers and pineapple over rice.", kind: "family", ingredients: ["pork", "rice", "peppers"] },
   { id: "pizza-night", name: "Pizza Night", description: "Stone-baked, mozzarella pulled to the edges, chilli oil on top.", kind: "family", ingredients: ["mozzarella", "tinned-tomatoes"] },
@@ -173,7 +174,7 @@ export const meals: Meal[] = [
   { id: "tuna-melt", name: "Tuna Melt", description: "Toasted, cheesy, and better than it has any right to be.", kind: "family", ingredients: ["tinned-tuna", "bread", "cheese"] },
   { id: "jacket-potatoes", name: "Jacket Potatoes", description: "Crisp skins, fluffy middles, beans and cheese piled on.", kind: "family", ingredients: ["potatoes", "cheese", "baked-beans"] },
   { id: "loaded-wedges", name: "Loaded Wedges", description: "Wedges under melted cheese with soured cream and spring onion.", kind: "family", ingredients: ["wedges", "cheese"] },
-  { id: "greek-salad", name: "Greek Salad", description: "Tomato, cucumber, olives, and a thick slab of feta.", kind: "family", ingredients: ["cucumber", "tomato", "lettuce"] },
+  { id: "greek-salad", name: "Greek Salad", description: "Tomato, cucumber, olives, and a thick slab of feta.", kind: "family", ingredients: ["cucumber", "tomato", "feta"] },
   { id: "soup-toasties", name: "Soup and Toasties", description: "Something cosy and simple before the next week begins.", kind: "family", ingredients: ["bread", "cheese"] },
   { id: "sweetcorn-chowder", name: "Sweetcorn Chowder", description: "Thick, sweet, and creamy with plenty of black pepper.", kind: "family", ingredients: ["sweetcorn", "potatoes", "cream"] },
 
@@ -187,7 +188,7 @@ export const meals: Meal[] = [
   { id: "mac-cheese", name: "Mac and Cheese", description: "Creamy macaroni bake with a crunchy golden top.", kind: "kids", ingredients: ["pasta", "cheese"] },
   { id: "pasta-bake", name: "Pasta Bake", description: "Baked pasta, tomato sauce, and a mozzarella lid.", kind: "kids", ingredients: ["pasta", "tinned-tomatoes", "mozzarella"] },
   { id: "mini-pizzas", name: "Mini Pizzas", description: "Little pizzas with simple toppings and lots of melted cheese.", kind: "kids", ingredients: ["mini-pizza", "mozzarella"] },
-  { id: "sausage-mash-kids", name: "Sausage and Mash", description: "Simple sausages with buttery mash and peas.", kind: "kids", ingredients: ["sausages", "potatoes"] },
+  { id: "sausage-mash-kids", name: "Bangers and Mash", description: "Simple sausages with buttery mash and peas.", kind: "kids", ingredients: ["sausages", "potatoes"] },
   { id: "sausages-beans-chips", name: "Sausages, Beans and Chips", description: "The classic plate. No notes.", kind: "kids", ingredients: ["sausages", "baked-beans", "chips"] },
   { id: "beans-on-toast", name: "Beans on Toast", description: "Thick toast, hot beans, cheese on top if it is that kind of day.", kind: "kids", ingredients: ["baked-beans", "bread"] },
   { id: "toasties", name: "Cheese Toasties", description: "Golden toasties with veggie sticks on the side.", kind: "kids", ingredients: ["bread", "cheese"] },

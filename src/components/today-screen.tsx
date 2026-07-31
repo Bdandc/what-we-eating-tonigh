@@ -110,9 +110,9 @@ function TodayCard({
   const shuffleDisabled = !canShuffle(state);
   const fallback = isFallback(view, state.pantry, state.customMeals);
   const nextMeal = peekNextSuggestion(state);
-  const { outgoing, setDirection, clearOutgoing } = useCardDeck(meal);
+  const { outgoing, throwCard, clearOutgoing } = useCardDeck<NonNullable<typeof meal>>();
   const { setCard, handlers: swipeHandlers } = useSwipeShuffle(!shuffleDisabled, (direction) => {
-    setDirection(direction);
+    throwCard(meal, direction);
     setState((s) => (s ? shuffle(s) : s));
   });
 
@@ -187,7 +187,6 @@ function TodayCard({
         ) : null}
 
         <article
-          key={meal?.id ?? "none"}
           ref={setCard}
           {...swipeHandlers}
           data-testid="today-card"
@@ -199,7 +198,7 @@ function TodayCard({
               type="button"
               disabled={shuffleDisabled}
               onClick={() => {
-                setDirection("left");
+                throwCard(meal, "left");
                 setState((s) => (s ? shuffle(s) : s));
               }}
               className="flex items-center gap-1.5 text-xs font-bold disabled:text-muted"
@@ -212,7 +211,7 @@ function TodayCard({
               </span>
             </button>
           </div>
-          <div className="flex flex-1 flex-col justify-center">
+          <div key={meal?.id ?? "none"} className="card-content-in flex flex-1 flex-col justify-center">
             <h2 data-testid="meal-name" className="text-[32px] font-bold leading-10">
               {meal?.name ?? "Dinner"}
             </h2>

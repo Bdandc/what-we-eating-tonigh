@@ -1,42 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { ShuffleDirection } from "@/components/use-swipe-shuffle";
 
 type Outgoing<T> = { item: T; direction: ShuffleDirection; seq: number };
 
 /**
- * Keeps the previous card around for one animation so it can be thrown off the
- * deck while the next one rises into its place.
+ * Keeps the just-shuffled card around for one animation so it can be thrown
+ * off the deck while the next one rises into its place.
  *
- * The direction is recorded before the state change lands (by the swipe hook or
- * the Shuffle button), so the card always leaves the way it was pushed.
+ * The throw is EXPLICIT: only the shuffle actions call throwCard(), so view
+ * toggles, midnight rollover, and pantry commits swap the card without the
+ * shuffle theatrics (they are not shuffles and must not look like one).
  * Under prefers-reduced-motion nothing is retained and the swap is instant.
  */
-export function useCardDeck<T extends { id: string }>(current: T | null) {
+export function useCardDeck<T extends { id: string }>() {
   const [outgoing, setOutgoing] = useState<Outgoing<T> | null>(null);
-  const previous = useRef<T | null>(current);
-  const direction = useRef<ShuffleDirection>("left");
   const seq = useRef(0);
 
-  useEffect(() => {
-    const before = previous.current;
-    previous.current = current;
-    if (!before || !current || before.id === current.id) return;
+  const throwCard = useCallback((item: T | null, direction: ShuffleDirection) => {
+    if (!item) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     seq.current += 1;
-    setOutgoing({
-      item: before,
-      direction: direction.current,
-      seq: seq.current,
-    });
-  }, [current]);
-
-  const setDirection = useCallback((next: ShuffleDirection) => {
-    direction.current = next;
+    setOutgoing({ item, direction, seq: seq.current });
   }, []);
 
   const clearOutgoing = useCallback(() => setOutgoing(null), []);
 
-  return { outgoing, setDirection, clearOutgoing };
+  return { outgoing, throwCard, clearOutgoing };
 }

@@ -9,7 +9,7 @@ import {
   CATEGORIES,
   seededIngredients,
 } from "@/lib/wawet-data";
-import { addCustomIngredient, commitPantry, togglePantry } from "@/lib/wawet-state";
+import { addCustomIngredient, applyPantryOverrides } from "@/lib/wawet-state";
 import { useWawet } from "@/components/use-wawet";
 
 const CHIP_LIMIT = 8;
@@ -28,6 +28,9 @@ export function PantryScreen() {
   const [category, setCategory] = useState<Category>("protein");
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  // A REAL draft: chip toggles live here, not in the store. Back discards;
+  // only the Save button writes them through (applyPantryOverrides).
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
 
   const grouped = useMemo(() => {
     if (!state) return [];
@@ -50,23 +53,30 @@ export function PantryScreen() {
     dialogRef.current?.close();
   }
 
+  function tickState(id: string): boolean {
+    if (Object.prototype.hasOwnProperty.call(overrides, id)) return overrides[id];
+    return state?.pantry[id] === true;
+  }
+
   function saveSelection() {
-    setState((s) => (s ? commitPantry(s) : s));
+    setState((s) => (s ? applyPantryOverrides(s, overrides) : s));
     router.push("/");
   }
 
   function save() {
-    setState((s) => {
-      if (!s) return s;
-      const result = addCustomIngredient(s, name, category);
-      if (!result.ok) {
-        setError(result.error);
-        return s;
-      }
-      setError(null);
-      closeSheet();
-      return result.state;
-    });
+    if (!state) return;
+    // Adding an item creates the entity immediately (it is a thing you own,
+    // not a tick); its selected state joins the draft like any other chip.
+    const result = addCustomIngredient(state, name, category);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    const added = result.state.customIngredients[result.state.customIngredients.length - 1];
+    setError(null);
+    closeSheet();
+    setState(result.state);
+    setOverrides((current) => ({ ...current, [added.id]: true }));
   }
 
   return (
@@ -98,14 +108,16 @@ export function PantryScreen() {
                 <h2 className="text-base font-bold">{group.label}</h2>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {visible.map((item) => {
-                    const have = state.pantry[item.id] === true;
+                    const have = tickState(item.id);
                     return (
                       <button
                         key={item.id}
                         type="button"
                         data-testid={`chip-${item.id}`}
                         aria-pressed={have}
-                        onClick={() => setState((s) => (s ? togglePantry(s, item.id) : s))}
+                        onClick={() =>
+                          setOverrides((current) => ({ ...current, [item.id]: !have }))
+                        }
                         className={
                           have
                             ? "rounded-lg bg-surface px-4 py-3 text-xs font-bold shadow-sm"
