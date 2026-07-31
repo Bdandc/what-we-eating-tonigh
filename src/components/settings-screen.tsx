@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { type Weekday, WEEKDAYS } from "@/lib/wawet-data";
 import { resetShuffles, setKidsEnabled, setTakeawayDay } from "@/lib/wawet-state";
@@ -11,8 +12,45 @@ const chevronLeft = (
   </svg>
 );
 
+const spinner = (
+  <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4 motion-safe:animate-spin">
+    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2.5" opacity="0.25" />
+    <path d="M21 12a9 9 0 0 0-9-9" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+  </svg>
+);
+
+const checkIcon = (
+  <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+    <path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 export function SettingsScreen() {
   const [state, setState] = useWawet();
+  // Reset feedback: the reset itself is instant, so the button plays a short
+  // working -> done sequence purely as click acknowledgement.
+  const [resetPhase, setResetPhase] = useState<"idle" | "working" | "done">("idle");
+  const resetTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => {
+    const timers = resetTimers.current;
+    return () => timers.forEach(clearTimeout);
+  }, []);
+
+  function resetToday() {
+    if (resetPhase !== "idle") return;
+    setState((s) => (s ? resetShuffles(s) : s));
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      // No spinner theatre: acknowledge instantly, clear shortly after.
+      setResetPhase("done");
+      resetTimers.current.push(setTimeout(() => setResetPhase("idle"), 1200));
+      return;
+    }
+    setResetPhase("working");
+    resetTimers.current.push(setTimeout(() => setResetPhase("done"), 600));
+    resetTimers.current.push(setTimeout(() => setResetPhase("idle"), 2000));
+  }
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col px-6 pb-10 pt-5">
@@ -99,10 +137,25 @@ export function SettingsScreen() {
             <button
               type="button"
               data-testid="reset-shuffles"
-              onClick={() => setState((s) => (s ? resetShuffles(s) : s))}
-              className="mt-3 w-full rounded-lg bg-green-deep py-3.5 text-base font-bold text-white"
+              data-state={resetPhase}
+              aria-busy={resetPhase === "working"}
+              disabled={resetPhase !== "idle"}
+              onClick={resetToday}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-green-deep py-3.5 text-base font-bold text-white transition-opacity disabled:opacity-90"
             >
-              Reset today&apos;s shuffles
+              {resetPhase === "working" ? (
+                <>
+                  {spinner}
+                  Resetting&hellip;
+                </>
+              ) : resetPhase === "done" ? (
+                <>
+                  {checkIcon}
+                  Shuffles reset
+                </>
+              ) : (
+                <>Reset today&apos;s shuffles</>
+              )}
             </button>
           </section>
         </div>
