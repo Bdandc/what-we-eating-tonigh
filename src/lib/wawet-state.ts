@@ -443,6 +443,24 @@ export function commitPantry(state: WawetState): WawetState {
   return reevaluateSuggestions(state);
 }
 
+/**
+ * Apply a draft of tick overrides and commit in one step. The pantry screen
+ * keeps its toggles in local component state (a real draft: Back discards),
+ * and only this call writes them through.
+ */
+export function applyPantryOverrides(
+  state: WawetState,
+  overrides: Record<string, boolean>,
+): WawetState {
+  const pantry: Record<string, boolean> = Object.create(null);
+  for (const id of Object.keys(state.pantry)) {
+    pantry[id] = Object.prototype.hasOwnProperty.call(overrides, id)
+      ? overrides[id] === true
+      : state.pantry[id];
+  }
+  return commitPantry({ ...state, pantry });
+}
+
 export type AddIngredientResult =
   | { ok: true; state: WawetState }
   | { ok: false; error: string };

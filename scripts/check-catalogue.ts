@@ -47,6 +47,12 @@ for (const id of dupe(seededIngredients.map((i) => i.id))) problems.push(`duplic
 for (const name of dupe(seededIngredients.map((i) => i.name.toLowerCase()))) {
   problems.push(`duplicate ingredient name "${name}"`);
 }
+// Meal names must be unique ACROSS pools: the custom-meal duplicate check
+// compares against every seeded meal name, so a cross-pool dupe makes
+// "you already have that meal" fire confusingly.
+for (const name of dupe(meals.map((m) => m.name.toLowerCase()))) {
+  problems.push(`duplicate meal name "${name}" across pools`);
+}
 
 // 5. Shuffle needs at least two options in each pool.
 if (familyMeals.length < 2) problems.push("family pool needs at least 2 meals");

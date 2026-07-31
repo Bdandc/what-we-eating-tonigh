@@ -37,6 +37,7 @@ import {
   setView,
   shuffle,
   skipTakeaway,
+  applyPantryOverrides,
   commitPantry,
   peekNextSuggestion,
   togglePantry,
@@ -85,6 +86,11 @@ describe("wawet-data invariants", () => {
     const known = new Set(seededIngredients.map((i) => i.id));
     const dangling = meals.flatMap((m) => m.ingredients).filter((id) => !known.has(id));
     expect(dangling).toEqual([]);
+  });
+
+  it("meal names are unique across pools (custom-meal dupe errors stay sane)", () => {
+    const names = meals.map((m) => m.name.toLowerCase());
+    expect(names.filter((n, i) => names.indexOf(n) !== i)).toEqual([]);
   });
 
   it("the pre-filled staples exist and cover at least two meals per pool", () => {
@@ -277,6 +283,22 @@ describe("pantry filter + invalidation", () => {
     const toggled = togglePantry(s, mapped.ingredients[0]);
     expect(toggled.today.suggestionId).toBe(mapped.id);
     expect(commitPantry(toggled).today.suggestionId).not.toBe(mapped.id);
+  });
+
+  it("applyPantryOverrides writes only known ids, coerces to boolean, and commits", () => {
+    const all = selectAll(freshState(THURSDAY));
+    const mapped = familyMeals.find((m) => m.ingredients.length > 0)!;
+    const s = { ...all, today: { ...all.today, suggestionId: mapped.id } };
+    const applied = applyPantryOverrides(s, {
+      [mapped.ingredients[0]]: false,
+      "rogue-key": true,
+      __proto__: true,
+    } as Record<string, boolean>);
+    expect(applied.pantry[mapped.ingredients[0]]).toBe(false);
+    expect("rogue-key" in applied.pantry).toBe(false);
+    // Commit happened: the now-ineligible dish was re-picked for free.
+    expect(applied.today.suggestionId).not.toBe(mapped.id);
+    expect(applied.today.shufflesUsed).toBe(s.today.shufflesUsed);
   });
 
   it("re-picks the current suggestion for free when it becomes ineligible, in both views", () => {

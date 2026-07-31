@@ -72,11 +72,21 @@ test.describe("today screen", () => {
     await expect(page.getByTestId("shuffle-count")).toHaveText("1/3");
   });
 
+  test("shuffle button keeps keyboard focus across shuffles", async ({ page }) => {
+    await openAt(page, THURSDAY);
+    const button = page.getByRole("button", { name: /shuffle suggestion/i });
+    await button.click();
+    await expect(page.getByTestId("shuffle-count")).toHaveText("1/3");
+    await expect(button).toBeFocused();
+  });
+
   test("kids pill swaps to the kids suggestion and back", async ({ page }) => {
     await openAt(page, THURSDAY);
     const pill = page.getByTestId("kids-pill");
     await expect(pill).toHaveText("Kids suggestion");
     await pill.click();
+    // A view toggle is not a shuffle: no card gets thrown off the deck.
+    await expect(page.locator(".card-out")).toHaveCount(0);
     await expect(page.getByTestId("meal-name")).toHaveText(expected(THURSDAY).kids.name);
     await expect(pill).toHaveText("Family suggestion");
     await pill.click();
@@ -116,12 +126,17 @@ test.describe("pantry", () => {
     await expect(page.getByTestId("shuffle-count")).toHaveText("0/3");
   });
 
-  test("leaving without saving keeps tonight's dish", async ({ page }) => {
+  test("leaving without saving keeps tonight's dish AND discards the draft", async ({ page }) => {
     const meal = await openWithFullPantry(page, THURSDAY);
     await page.getByRole("link", { name: "Don't have the ingredients?" }).click();
-    await page.getByTestId(`chip-${meal.ingredients[0]}`).click();
+    const chip = page.getByTestId(`chip-${meal.ingredients[0]}`);
+    await chip.click();
+    await expect(chip).toHaveAttribute("aria-pressed", "false");
     await page.getByRole("link", { name: "Back" }).click();
     await expect(page.getByTestId("meal-name")).toHaveText(meal.name);
+    // The unsaved tick was discarded, not silently persisted.
+    await page.getByRole("link", { name: "Don't have the ingredients?" }).click();
+    await expect(page.getByTestId(`chip-${meal.ingredients[0]}`)).toHaveAttribute("aria-pressed", "true");
   });
 
   test("adds a custom item via the sheet, persists it, and rejects duplicates", async ({ page }) => {

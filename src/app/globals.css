@@ -143,13 +143,16 @@ dialog::backdrop {
   }
 
   /* Transition covers the snap-back when a drag ends below the shuffle
-     threshold; the swipe hook clears it for the duration of the drag. */
-  /* No fill-mode on purpose: a filled animation retains transform:none and
-     outranks the inline transform the drag writes, freezing the card. The
-     final keyframe already matches the base style, so there is no jump. */
+     threshold; the swipe hook clears it for the duration of the drag.
+     The entry animation lives on the keyed CONTENT div, not here: a running
+     animation on the article would outrank the drag's inline transform AND
+     remounting the article would drop keyboard focus from the Shuffle button. */
   .card-live {
-    animation: wawet-card-in 380ms var(--deck-ease);
     transition: transform 220ms var(--deck-ease);
+  }
+
+  .card-content-in {
+    animation: wawet-card-in 380ms var(--deck-ease);
   }
 
   .card-out-left {
