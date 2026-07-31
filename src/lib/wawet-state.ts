@@ -47,6 +47,8 @@ export type WawetState = {
   pantry: Record<string, boolean>;
   customIngredients: CustomIngredient[];
   customMeals: CustomMeal[];
+  /** One-time starter seeding marker: once true, deleted starters STAY deleted. */
+  startersSeeded: boolean;
   settings: Settings;
 };
 
@@ -189,6 +191,7 @@ export function freshState(now: Date = new Date()): WawetState {
     pantry,
     customIngredients: [],
     customMeals: starterMeals.map((m) => ({ ...m, ingredients: [...m.ingredients] })),
+    startersSeeded: true,
     settings: { takeawayDay: "Tuesday", kidsEnabled: true },
   };
 }
@@ -304,11 +307,20 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
     }
   }
 
-  if (customMeals.length === 0) {
-    // An empty My Meals gets the everyday starters (fresh installs, legacy
-    // states, and cleared lists alike). They are ordinary custom meals:
-    // rename or delete freely; ids are fixed so this stays idempotent.
-    customMeals.push(...starterMeals.map((m) => ({ ...m, ingredients: [...m.ingredients] })));
+  // One-time starter seeding for EVERY install that has not had it yet -
+  // including states that already hold the user's own meals. The persisted
+  // marker makes later deletions stick; a name or id clash skips just that
+  // starter (the user's meal wins).
+  let startersSeeded = parsed.startersSeeded === true;
+  if (!startersSeeded) {
+    const takenIds = new Set(customMeals.map((m) => m.id));
+    const takenNames = new Set(customMeals.map((m) => m.name.toLowerCase()));
+    for (const starter of starterMeals) {
+      if (customMeals.length >= MAX_CUSTOM_MEALS) break;
+      if (takenIds.has(starter.id) || takenNames.has(starter.name.toLowerCase())) continue;
+      customMeals.push({ ...starter, ingredients: [...starter.ingredients] });
+    }
+    startersSeeded = true;
   }
 
   // Today
@@ -347,6 +359,7 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
     pantry,
     customIngredients,
     customMeals,
+    startersSeeded,
     settings: { takeawayDay, kidsEnabled },
   };
 
