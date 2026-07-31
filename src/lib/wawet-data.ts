@@ -153,7 +153,6 @@ export const meals: Meal[] = [
   { id: "fish-pie", name: "Fish Pie", description: "Creamy fish under mash, browned at the edges.", kind: "family", ingredients: ["fish", "potatoes"] },
   { id: "prawn-linguine", name: "Prawn Linguine", description: "Garlic prawns, chilli, tomatoes, and a lot of lemon.", kind: "family", ingredients: ["prawns", "pasta", "tomato"] },
   { id: "prawn-noodles", name: "Prawn Noodles", description: "Quick prawn noodles with spring onion and sesame.", kind: "family", ingredients: ["prawns", "noodles"] },
-  { id: "sausage-and-mash", name: "Sausage and Mash", description: "Buttery mash, proper onion gravy, peas on the side.", kind: "family", ingredients: ["sausages", "potatoes", "garden-peas"] },
   { id: "toad-in-the-hole", name: "Toad in the Hole", description: "Sausages in a tall, crisp batter. Gravy is not optional.", kind: "family", ingredients: ["sausages", "eggs"] },
   { id: "sausage-pasta-bake", name: "Sausage Pasta Bake", description: "Sausage meat, tomato sauce, and baked pasta with a crisp top.", kind: "family", ingredients: ["sausages", "pasta", "tinned-tomatoes"] },
   { id: "carbonara", name: "Carbonara", description: "Eggs, bacon, black pepper. No cream, no arguments.", kind: "family", ingredients: ["bacon", "pasta", "eggs"] },
@@ -207,3 +206,17 @@ export const kidsMeals = meals.filter((m) => m.kind === "kids");
 export const mealById: Record<string, Meal> = Object.fromEntries(
   meals.map((m) => [m.id, m]),
 );
+
+/**
+ * Everyday starters for My Meals: they ship as ordinary CUSTOM meals, so the
+ * page is never empty and every one can be edited or deleted like the user's
+ * own. Fixed ids (valid m-UUID shape) keep them stable across loads; names
+ * must never collide with the seeded catalogue (parseState would drop them).
+ */
+export const starterMeals = [
+  { id: "m-00000000-0000-4000-8000-000000000001", name: "Burger and Chips", description: "Homemade burgers and oven chips. Sauce debates mandatory.", kind: "family" as MealKind, ingredients: ["beef-mince", "chips"] },
+  { id: "m-00000000-0000-4000-8000-000000000002", name: "Sausage and Mash", description: "Buttery mash, proper onion gravy, peas on the side.", kind: "family" as MealKind, ingredients: ["sausages", "potatoes", "garden-peas"] },
+  { id: "m-00000000-0000-4000-8000-000000000003", name: "Full English", description: "Bacon, sausages, eggs, and everything else that fits the pan.", kind: "family" as MealKind, ingredients: ["bacon", "eggs", "sausages"] },
+  { id: "m-00000000-0000-4000-8000-000000000004", name: "Fried Crispy Chicken", description: "Golden fried chicken with chips and something cold to drink.", kind: "family" as MealKind, ingredients: ["chicken", "chips"] },
+  { id: "m-00000000-0000-4000-8000-000000000005", name: "Peas and Mash", description: "Green and comforting. Ten minutes, two pans, done.", kind: "family" as MealKind, ingredients: ["garden-peas", "potatoes"] },
+];

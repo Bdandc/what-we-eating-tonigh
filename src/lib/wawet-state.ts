@@ -4,6 +4,7 @@ import {
   type Weekday,
   CATEGORIES,
   LIKELY_STOCKED,
+  starterMeals,
   WEEKDAYS,
   familyMeals,
   kidsMeals,
@@ -187,7 +188,7 @@ export function freshState(now: Date = new Date()): WawetState {
     },
     pantry,
     customIngredients: [],
-    customMeals: [],
+    customMeals: starterMeals.map((m) => ({ ...m, ingredients: [...m.ingredients] })),
     settings: { takeawayDay: "Tuesday", kidsEnabled: true },
   };
 }
@@ -301,6 +302,13 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
       seenMealNames.add(lowerName);
       customMeals.push({ id, name: trimmedName, description: desc, kind, ingredients: mealIngredients });
     }
+  }
+
+  if (customMeals.length === 0) {
+    // An empty My Meals gets the everyday starters (fresh installs, legacy
+    // states, and cleared lists alike). They are ordinary custom meals:
+    // rename or delete freely; ids are fixed so this stays idempotent.
+    customMeals.push(...starterMeals.map((m) => ({ ...m, ingredients: [...m.ingredients] })));
   }
 
   // Today

@@ -5,6 +5,7 @@ import {
   kidsMeals,
   meals,
   seededIngredients,
+  starterMeals,
 } from "@/lib/wawet-data";
 import {
   LEGACY_STORAGE_KEY,
@@ -147,6 +148,7 @@ describe("freshState defaults", () => {
     expect(s.today.takeawaySkipped).toBe(false);
     expect(s.today.date).toBe("2026-07-30");
     expect(s.customIngredients).toEqual([]);
+    expect(s.customMeals.map((m) => m.name)).toEqual(starterMeals.map((m) => m.name));
     const likely = new Set(LIKELY_STOCKED);
     for (const ing of seededIngredients) {
       expect(s.pantry[ing.id]).toBe(likely.has(ing.id));
@@ -696,9 +698,33 @@ describe("custom meals", () => {
     return result.state;
   }
 
+  function byName(state: WawetState, name: string) {
+    const meal = state.customMeals.find((m) => m.name === name);
+    if (!meal) throw new Error(`missing custom meal ${name}`);
+    return meal;
+  }
+
+  it("ships the everyday starters, valid and non-colliding", () => {
+    expect(base.customMeals.map((m) => m.name)).toEqual(starterMeals.map((m) => m.name));
+    const seededNames = new Set(meals.map((m) => m.name.toLowerCase()));
+    for (const starter of starterMeals) {
+      expect(starter.id).toMatch(/^m-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(seededNames.has(starter.name.toLowerCase())).toBe(false);
+    }
+  });
+
+  it("re-seeds starters into a parsed state whose meal list is empty, and only then", () => {
+    const emptied = JSON.stringify({ ...base, customMeals: [] });
+    const back = parseState(emptied, THURSDAY2);
+    expect(back.customMeals.map((m) => m.name)).toEqual(starterMeals.map((m) => m.name));
+
+    const oneLeft = JSON.stringify({ ...base, customMeals: [base.customMeals[0]] });
+    expect(parseState(oneLeft, THURSDAY2).customMeals).toHaveLength(1);
+  });
+
   it("joins only its own kind's pool with an opaque m- id", () => {
     const s = withMeal();
-    const meal = s.customMeals[0];
+    const meal = byName(s, "Shopska Salad");
     expect(meal.id).toMatch(/^m-[0-9a-f-]{36}$/);
     expect(fullIds("family", s.customMeals)).toContain(meal.id);
     expect(fullIds("kids", s.customMeals)).not.toContain(meal.id);
@@ -714,7 +740,7 @@ describe("custom meals", () => {
   it("prunes unknown ingredient ids on add", () => {
     const result = addCustomMeal(base, { name: "Mystery", kind: "family", ingredients: ["chicken", "not-real"] });
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.state.customMeals[0].ingredients).toEqual(["chicken"]);
+    if (result.ok) expect(byName(result.state, "Mystery").ingredients).toEqual(["chicken"]);
   });
 
   it("a custom ingredient gates a custom meal through the pantry filter", () => {
@@ -724,7 +750,7 @@ describe("custom meals", () => {
     const meal = addCustomMeal(ing.state, { name: "Halloumi Bake", kind: "family", ingredients: [halloumiId] });
     if (!meal.ok) throw new Error("setup");
     let s = meal.state;
-    const mealId = s.customMeals[0].id;
+    const mealId = byName(s, "Halloumi Bake").id;
     expect(eligibleIds("family", s.pantry, s.customMeals)).toContain(mealId);
     s = { ...s, today: { ...s.today, suggestionId: mealId } };
     const toggled = commitPantry(togglePantry(s, halloumiId));
@@ -735,10 +761,10 @@ describe("custom meals", () => {
 
   it("removing tonight's suggested custom meal re-picks for free", () => {
     let s = withMeal();
-    const mealId = s.customMeals[0].id;
+    const mealId = byName(s, "Shopska Salad").id;
     s = { ...s, today: { ...s.today, suggestionId: mealId } };
     const removed = removeCustomMeal(s, mealId);
-    expect(removed.customMeals).toEqual([]);
+    expect(removed.customMeals.some((m) => m.id === mealId)).toBe(false);
     expect(removed.today.suggestionId).not.toBe(mealId);
     expect(removed.today.shufflesUsed).toBe(s.today.shufflesUsed);
   });
@@ -746,7 +772,7 @@ describe("custom meals", () => {
   it("resolveMeal finds seeded and custom meals", () => {
     const s = withMeal();
     expect(resolveMeal(s, "lasagna-night")?.name).toBe("Lasagna");
-    expect(resolveMeal(s, s.customMeals[0].id)?.name).toBe("Shopska Salad");
+    expect(resolveMeal(s, byName(s, "Shopska Salad").id)?.name).toBe("Shopska Salad");
     expect(resolveMeal(s, "nope")).toBeNull();
   });
 
@@ -774,12 +800,12 @@ describe("custom meals", () => {
 
   it("updateCustomMeal edits in place, allows keeping its own name, dedupes others", () => {
     const s = withMeal("Shopska Salad", "family", ["tomato"]);
-    const id = s.customMeals[0].id;
+    const id = byName(s, "Shopska Salad").id;
     const kept = updateCustomMeal(s, id, { name: "Shopska Salad", description: "New words", kind: "family", ingredients: ["tomato", "cucumber", "ghost-item"] });
     expect(kept.ok).toBe(true);
     if (!kept.ok) return;
-    expect(kept.state.customMeals[0].description).toBe("New words");
-    expect(kept.state.customMeals[0].ingredients).toEqual(["tomato", "cucumber"]);
+    expect(byName(kept.state, "Shopska Salad").description).toBe("New words");
+    expect(byName(kept.state, "Shopska Salad").ingredients).toEqual(["tomato", "cucumber"]);
 
     const renamedToSeeded = updateCustomMeal(s, id, { name: "Lasagna", kind: "family", ingredients: [] });
     expect(renamedToSeeded.ok).toBe(false);
@@ -793,7 +819,7 @@ describe("custom meals", () => {
     s = deselectAll(s);
     const offPantryDeal = familyMeals.find((m) => m.ingredients.length > 0)!.id;
     s = { ...s, today: { ...s.today, suggestionId: offPantryDeal } };
-    const edited = updateCustomMeal(s, s.customMeals[0].id, {
+    const edited = updateCustomMeal(s, byName(s, "Shopska Salad").id, {
       name: "Renamed Salad",
       kind: "family",
       ingredients: [],
@@ -802,23 +828,23 @@ describe("custom meals", () => {
     if (!edited.ok) return;
     expect(edited.state.today.suggestionId).toBe(offPantryDeal);
 
-    const removed = removeCustomMeal(s, s.customMeals[0].id);
+    const removed = removeCustomMeal(s, byName(s, "Shopska Salad").id);
     expect(removed.today.suggestionId).toBe(offPantryDeal);
   });
 
   it("updateCustomMeal validates like add: empty name, over-length, sliced description", () => {
     const s = withMeal("Shopska Salad", "family", []);
-    const id = s.customMeals[0].id;
+    const id = byName(s, "Shopska Salad").id;
     expect(updateCustomMeal(s, id, { name: "   ", kind: "family", ingredients: [] }).ok).toBe(false);
     expect(updateCustomMeal(s, id, { name: "x".repeat(61), kind: "family", ingredients: [] }).ok).toBe(false);
     const long = updateCustomMeal(s, id, { name: "Fine", description: "d".repeat(500), kind: "family", ingredients: [] });
     expect(long.ok).toBe(true);
-    if (long.ok) expect(long.state.customMeals[0].description.length).toBe(200);
+    if (long.ok) expect(byName(long.state, "Fine").description.length).toBe(200);
   });
 
   it("updateCustomMeal kind change re-picks a stranded suggestion for free", () => {
     let s = withMeal("Shopska Salad", "family", []);
-    const id = s.customMeals[0].id;
+    const id = byName(s, "Shopska Salad").id;
     s = { ...s, today: { ...s.today, suggestionId: id } };
     const result = updateCustomMeal(s, id, { name: "Shopska Salad", kind: "kids", ingredients: [] });
     expect(result.ok).toBe(true);
@@ -829,7 +855,8 @@ describe("custom meals", () => {
 
   it("enforces the meal count cap", () => {
     let s = base;
-    for (let i = 0; i < MAX_CUSTOM_MEALS; i++) {
+    const room = MAX_CUSTOM_MEALS - s.customMeals.length;
+    for (let i = 0; i < room; i++) {
       const r = addCustomMeal(s, { name: `Meal ${i}`, kind: "family", ingredients: [] });
       if (!r.ok) throw new Error(`setup failed at ${i}`);
       s = r.state;
