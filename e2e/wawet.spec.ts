@@ -213,7 +213,16 @@ test.describe("settings", () => {
     await page.getByRole("button", { name: /shuffle/i }).click();
     await expect(page.getByTestId("shuffle-count")).toHaveText("1/3");
     await page.getByRole("link", { name: /Settings/ }).click();
-    await page.getByTestId("reset-shuffles").click();
+    const reset = page.getByTestId("reset-shuffles");
+    await reset.click();
+    // Click acknowledgement: working spinner, then done, then idle again
+    // (timers ride the fake clock).
+    await expect(reset).toHaveAttribute("data-state", "working");
+    await expect(reset).toBeDisabled();
+    await page.clock.runFor(700);
+    await expect(reset).toHaveAttribute("data-state", "done");
+    await page.clock.runFor(1500);
+    await expect(reset).toHaveAttribute("data-state", "idle");
     await page.getByRole("link", { name: "Back" }).click();
     await expect(page.getByTestId("shuffle-count")).toHaveText("0/3");
 
