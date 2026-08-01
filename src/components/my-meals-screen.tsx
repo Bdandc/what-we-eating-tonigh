@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { meals } from "@/lib/wawet-data";
+import { setSeededMealHidden } from "@/lib/wawet-state";
 import { useWawet } from "@/components/use-wawet";
 
 const chevronLeft = (
@@ -23,7 +26,23 @@ const plusSquare = (
 );
 
 export function MyMealsScreen() {
-  const [state] = useWawet();
+  const [state, setState] = useWawet();
+  const [error, setError] = useState<string | null>(null);
+
+  const toggleHidden = (id: string, hidden: boolean) => {
+    setError(null);
+    setState((s) => {
+      if (!s) return s;
+      const result = setSeededMealHidden(s, id, hidden);
+      if (!result.ok) {
+        setError(result.error);
+        return s;
+      }
+      return result.state;
+    });
+  };
+
+  const hiddenSet = new Set(state?.hiddenSeededMeals ?? []);
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col px-6 pb-10 pt-5">
@@ -41,29 +60,71 @@ export function MyMealsScreen() {
 
       {!state ? (
         <div className="mt-8 h-40 animate-pulse rounded-2xl bg-white/70" />
-      ) : state.customMeals.length === 0 ? (
-        <p className="mt-8 text-sm text-muted" data-testid="no-meals">
-          No meals yet. Add your first one and it joins the suggestions.
-        </p>
       ) : (
-        <ul className="mt-8 flex flex-col gap-3">
-          {state.customMeals.map((meal) => (
-            <li key={meal.id}>
-              <Link
-                href={`/meals/${meal.id}`}
-                className="flex items-center justify-between rounded-xl bg-surface px-4 py-4 shadow-sm"
-              >
-                <span className="text-sm font-bold">
-                  {meal.name}
-                  <span className="ml-3 font-normal text-muted">
-                    {meal.kind === "kids" ? "Kids" : "Family"}
+        <>
+          <h2 className="mt-8 text-sm font-bold text-muted">Your meals</h2>
+          {state.customMeals.length === 0 ? (
+            <p className="mt-3 text-sm text-muted" data-testid="no-meals">
+              No meals yet. Add your first one and it joins the suggestions.
+            </p>
+          ) : (
+            <ul className="mt-3 flex flex-col gap-3">
+              {state.customMeals.map((meal) => (
+                <li key={meal.id}>
+                  <Link
+                    href={`/meals/${meal.id}`}
+                    className="flex items-center justify-between rounded-xl bg-surface px-4 py-4 shadow-sm"
+                  >
+                    <span className="text-sm font-bold">
+                      {meal.name}
+                      <span className="ml-3 font-normal text-muted">
+                        {meal.kind === "kids" ? "Kids" : "Family"}
+                      </span>
+                    </span>
+                    {chevronRight}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <h2 className="mt-10 text-sm font-bold text-muted">Built-in meals</h2>
+          <p className="mt-1 text-xs text-muted">
+            Part of the app. Hide any dish you never want suggested.
+          </p>
+          {error ? (
+            <p data-testid="builtin-error" className="mt-2 text-xs font-bold text-[#c0392b]">
+              {error}
+            </p>
+          ) : null}
+          <ul className="mt-3 flex flex-col gap-3" data-testid="builtin-meals">
+            {meals.map((meal) => {
+              const hidden = hiddenSet.has(meal.id);
+              return (
+                <li
+                  key={meal.id}
+                  className={`flex items-center justify-between rounded-xl bg-surface px-4 py-4 shadow-sm ${hidden ? "opacity-50" : ""}`}
+                >
+                  <span className="text-sm font-bold">
+                    {meal.name}
+                    <span className="ml-3 font-normal text-muted">
+                      {meal.kind === "kids" ? "Kids" : "Family"}
+                    </span>
                   </span>
-                </span>
-                {chevronRight}
-              </Link>
-            </li>
-          ))}
-        </ul>
+                  <button
+                    type="button"
+                    data-testid={`toggle-${meal.id}`}
+                    aria-pressed={hidden}
+                    onClick={() => toggleHidden(meal.id, !hidden)}
+                    className="rounded-lg border border-foreground/20 px-3 py-1 text-xs font-bold"
+                  >
+                    {hidden ? "Show" : "Hide"}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
     </main>
   );

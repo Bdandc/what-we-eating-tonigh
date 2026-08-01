@@ -56,6 +56,8 @@ export type WawetState = {
   /** One-time starter seeding marker: once true, deleted starters STAY deleted. */
   startersSeeded: boolean;
   recent: RecentSuggestions;
+  /** Built-in meal ids the user has hidden: never suggested, never dealt. */
+  hiddenSeededMeals: string[];
   settings: Settings;
 };
 
@@ -117,31 +119,45 @@ export function pick(poolIds: string[], seed: string): string {
 // Eligibility (pantry filter)
 // ---------------------------------------------------------------------------
 
-function poolFor(kind: MealKind, customMeals: CustomMeal[] = []) {
+function poolFor(
+  kind: MealKind,
+  customMeals: CustomMeal[] = [],
+  hidden: string[] = [],
+) {
   const seeded = kind === "family" ? familyMeals : kidsMeals;
-  return [...seeded, ...customMeals.filter((meal) => meal.kind === kind)];
+  const hiddenSet = new Set(hidden);
+  return [
+    ...seeded.filter((meal) => !hiddenSet.has(meal.id)),
+    ...customMeals.filter((meal) => meal.kind === kind),
+  ];
 }
 
 export function eligibleIds(
   kind: MealKind,
   pantry: Record<string, boolean>,
   customMeals: CustomMeal[] = [],
+  hidden: string[] = [],
 ): string[] {
-  return poolFor(kind, customMeals)
+  return poolFor(kind, customMeals, hidden)
     .filter((meal) => meal.ingredients.every((ing) => pantry[ing] === true))
     .map((meal) => meal.id);
 }
 
-export function fullIds(kind: MealKind, customMeals: CustomMeal[] = []): string[] {
-  return poolFor(kind, customMeals).map((meal) => meal.id);
+export function fullIds(
+  kind: MealKind,
+  customMeals: CustomMeal[] = [],
+  hidden: string[] = [],
+): string[] {
+  return poolFor(kind, customMeals, hidden).map((meal) => meal.id);
 }
 
 export function isFallback(
   kind: MealKind,
   pantry: Record<string, boolean>,
   customMeals: CustomMeal[] = [],
+  hidden: string[] = [],
 ): boolean {
-  return eligibleIds(kind, pantry, customMeals).length === 0;
+  return eligibleIds(kind, pantry, customMeals, hidden).length === 0;
 }
 
 /** Eligible pool, or the full pool when the eligible pool is empty (fallback mode). */
@@ -149,9 +165,10 @@ function activeIds(
   kind: MealKind,
   pantry: Record<string, boolean>,
   customMeals: CustomMeal[] = [],
+  hidden: string[] = [],
 ): string[] {
-  const eligible = eligibleIds(kind, pantry, customMeals);
-  return eligible.length > 0 ? eligible : fullIds(kind, customMeals);
+  const eligible = eligibleIds(kind, pantry, customMeals, hidden);
+  return eligible.length > 0 ? eligible : fullIds(kind, customMeals, hidden);
 }
 
 function dailyPick(
@@ -181,9 +198,10 @@ function varietyPick(
   customMeals: CustomMeal[],
   recent: string[],
   date: string,
+  hidden: string[] = [],
 ): string {
-  const eligible = eligibleIds(kind, pantry, customMeals);
-  const full = fullIds(kind, customMeals);
+  const eligible = eligibleIds(kind, pantry, customMeals, hidden);
+  const full = fullIds(kind, customMeals, hidden);
   const recentSet = new Set(recent);
   const yesterday = recent[0];
   const pool =
@@ -233,6 +251,7 @@ export function freshState(now: Date = new Date()): WawetState {
     customMeals: starterMeals.map((m) => ({ ...m, ingredients: [...m.ingredients] })),
     startersSeeded: true,
     recent: { family: [], kids: [] },
+    hiddenSeededMeals: [],
     settings: { takeawayDay: "Tuesday", kidsEnabled: true },
   };
 }
@@ -364,8 +383,27 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
     startersSeeded = true;
   }
 
+  // Hidden built-ins: known seeded ids only, deduped. A view whose every
+  // visible meal would vanish gets its hidden entries dropped instead: the
+  // deck must always hold at least one card per view or pick() dies.
+  const hiddenSeededMeals: string[] = [];
+  if (Array.isArray(parsed.hiddenSeededMeals)) {
+    for (const id of parsed.hiddenSeededMeals) {
+      if (typeof id !== "string" || !mealById[id] || hiddenSeededMeals.includes(id)) continue;
+      hiddenSeededMeals.push(id);
+    }
+  }
+  for (const kind of ["family", "kids"] as const) {
+    if (fullIds(kind, customMeals, hiddenSeededMeals).length === 0) {
+      for (let i = hiddenSeededMeals.length - 1; i >= 0; i--) {
+        if (mealById[hiddenSeededMeals[i]]?.kind === kind) hiddenSeededMeals.splice(i, 1);
+      }
+    }
+  }
+
   // Recent suggestions: known meal ids only, deduped, capped. A missing or
   // malformed history costs nothing worse than a possible repeat tomorrow.
+  // Hidden ids stay valid here: they are exclusions, not candidates.
   const rawRecent = isRecord(parsed.recent) ? parsed.recent : {};
   const readRecent = (kind: MealKind, value: unknown): string[] => {
     if (!Array.isArray(value)) return [];
@@ -401,9 +439,12 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
   // re-pick the dish on its own. Eligibility re-matching happens exclusively
   // in commitPantry(), at rollover, and on shuffle.
   const repair = (kind: MealKind, id: unknown): string => {
-    const full = fullIds(kind, customMeals);
+    const full = fullIds(kind, customMeals, hiddenSeededMeals);
     if (typeof id === "string" && full.includes(id)) return id;
-    return pick(activeIds(kind, pantry, customMeals), `${date}:${kind}:${shufflesUsed}`);
+    return pick(
+      activeIds(kind, pantry, customMeals, hiddenSeededMeals),
+      `${date}:${kind}:${shufflesUsed}`,
+    );
   };
 
   const state: WawetState = {
@@ -421,6 +462,7 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
     customMeals,
     startersSeeded,
     recent,
+    hiddenSeededMeals,
     settings: { takeawayDay, kidsEnabled },
   };
 
@@ -445,8 +487,8 @@ export function rolloverIfNeeded(state: WawetState, now: Date = new Date()): Waw
     recent,
     today: {
       date,
-      suggestionId: varietyPick("family", state.pantry, state.customMeals, recent.family, date),
-      kidsSuggestionId: varietyPick("kids", state.pantry, state.customMeals, recent.kids, date),
+      suggestionId: varietyPick("family", state.pantry, state.customMeals, recent.family, date, state.hiddenSeededMeals),
+      kidsSuggestionId: varietyPick("kids", state.pantry, state.customMeals, recent.kids, date, state.hiddenSeededMeals),
       shufflesUsed: 0,
       view: state.settings.kidsEnabled ? state.today.view : "family",
       takeawaySkipped: false,
@@ -460,7 +502,7 @@ export function canShuffle(state: WawetState): boolean {
   // card: when the pantry narrows the eligible pool to one (or zero) meals,
   // the deal extends past it rather than dying with no explanation. The card
   // itself says when a dealt meal does not match the pantry.
-  return fullIds(state.today.view, state.customMeals).length > 1;
+  return fullIds(state.today.view, state.customMeals, state.hiddenSeededMeals).length > 1;
 }
 
 /** Does this meal's every hero ingredient hold a tick right now? */
@@ -482,9 +524,10 @@ function nextShuffleId(state: WawetState): string | null {
   // Deal from the pantry-matched pool first; when that leaves nothing to deal
   // (eligible is empty OR exactly the current card), extend to the full pool
   // so the deck never goes dead mid-day.
-  let pool = eligibleIds(view, state.pantry, state.customMeals).filter((id) => id !== current);
+  let pool = eligibleIds(view, state.pantry, state.customMeals, state.hiddenSeededMeals)
+    .filter((id) => id !== current);
   if (pool.length === 0) {
-    pool = fullIds(view, state.customMeals).filter((id) => id !== current);
+    pool = fullIds(view, state.customMeals, state.hiddenSeededMeals).filter((id) => id !== current);
   }
   return pick(pool, `${date}:${view}:${n}`);
 }
@@ -530,7 +573,7 @@ export function isTakeawayToday(state: WawetState, now: Date = new Date()): bool
 function reevaluateSuggestions(state: WawetState): WawetState {
   const { date, shufflesUsed } = state.today;
   const revalidate = (kind: MealKind, current: string): string => {
-    const active = activeIds(kind, state.pantry, state.customMeals);
+    const active = activeIds(kind, state.pantry, state.customMeals, state.hiddenSeededMeals);
     if (active.includes(current)) return current;
     return pick(active, `${date}:${kind}:${shufflesUsed}`);
   };
@@ -679,9 +722,12 @@ function repairSuggestionForMeal(state: WawetState, mealId: string): WawetState 
   const { date, shufflesUsed } = state.today;
   const repair = (kind: MealKind, current: string): string => {
     if (current !== mealId) return current;
-    const full = fullIds(kind, state.customMeals);
+    const full = fullIds(kind, state.customMeals, state.hiddenSeededMeals);
     if (full.includes(current)) return current;
-    return pick(activeIds(kind, state.pantry, state.customMeals), `${date}:${kind}:${shufflesUsed}`);
+    return pick(
+      activeIds(kind, state.pantry, state.customMeals, state.hiddenSeededMeals),
+      `${date}:${kind}:${shufflesUsed}`,
+    );
   };
   const suggestionId = repair("family", state.today.suggestionId);
   const kidsSuggestionId = repair("kids", state.today.kidsSuggestionId);
@@ -692,6 +738,34 @@ function repairSuggestionForMeal(state: WawetState, mealId: string): WawetState 
     return state;
   }
   return { ...state, today: { ...state.today, suggestionId, kidsSuggestionId } };
+}
+
+/**
+ * Hide or show a built-in meal. Hidden meals never get suggested or dealt.
+ * Hiding tonight's dish re-picks it for free (same discipline as deletion);
+ * the last visible meal of a view can never be hidden.
+ */
+export function setSeededMealHidden(
+  state: WawetState,
+  id: string,
+  hidden: boolean,
+): SaveResult {
+  const meal = mealById[id];
+  if (!meal) return { ok: false, error: "That meal no longer exists." };
+  const isHidden = state.hiddenSeededMeals.includes(id);
+  if (hidden === isHidden) return { ok: true, state };
+  if (!hidden) {
+    return {
+      ok: true,
+      state: { ...state, hiddenSeededMeals: state.hiddenSeededMeals.filter((x) => x !== id) },
+    };
+  }
+  const nextHidden = [...state.hiddenSeededMeals, id];
+  if (fullIds(meal.kind, state.customMeals, nextHidden).length === 0) {
+    return { ok: false, error: "Keep at least one meal in this view." };
+  }
+  const next = { ...state, hiddenSeededMeals: nextHidden };
+  return { ok: true, state: repairSuggestionForMeal(next, id) };
 }
 
 export function removeCustomMeal(state: WawetState, id: string): WawetState {
