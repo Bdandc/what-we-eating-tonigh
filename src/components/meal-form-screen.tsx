@@ -1,10 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type MealKind, seededIngredients } from "@/lib/wawet-data";
-import { addCustomMeal, removeCustomMeal, updateCustomMeal } from "@/lib/wawet-state";
+import {
+  CATEGORIES,
+  type Category,
+  type Ingredient,
+  type MealKind,
+  seededIngredients,
+} from "@/lib/wawet-data";
+import {
+  addCustomIngredient,
+  addCustomMeal,
+  removeCustomMeal,
+  updateCustomMeal,
+} from "@/lib/wawet-state";
 import { useWawet } from "@/components/use-wawet";
 
 const chevronLeft = (
@@ -31,6 +42,11 @@ export function MealFormScreen({ mealId }: { mealId?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [armedDelete, setArmedDelete] = useState(false);
+  const [query, setQuery] = useState("");
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [newName, setNewName] = useState("");
+  const [newCategory, setNewCategory] = useState<Category>("protein");
+  const [addError, setAddError] = useState<string | null>(null);
 
   const editing = state && mealId ? state.customMeals.find((m) => m.id === mealId) ?? null : null;
 
@@ -75,7 +91,40 @@ export function MealFormScreen({ mealId }: { mealId?: string }) {
     router.push("/meals");
   }
 
-  const pantryItems = [...seededIngredients, ...(state?.customIngredients ?? [])];
+  // Every item, seeded and custom, grouped like the pantry so nothing is
+  // buried in one long chip wall. The search narrows across all groups.
+  const grouped = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return CATEGORIES.map((cat) => ({
+      ...cat,
+      items: [
+        ...seededIngredients.filter((i) => i.category === cat.id),
+        ...(state?.customIngredients ?? []).filter((i) => i.category === cat.id),
+      ].filter((i) => q === "" || i.name.toLowerCase().includes(q)) as Ingredient[],
+    })).filter((group) => group.items.length > 0);
+  }, [state, query]);
+
+  function openSheet() {
+    setNewName("");
+    setAddError(null);
+    dialogRef.current?.showModal();
+  }
+
+  function addItem() {
+    if (!state) return;
+    const result = addCustomIngredient(state, newName, newCategory);
+    if (!result.ok) {
+      setAddError(result.error);
+      return;
+    }
+    const added = result.state.customIngredients[result.state.customIngredients.length - 1];
+    setAddError(null);
+    dialogRef.current?.close();
+    setState(result.state);
+    // The new item joins this meal's selection right away: that is why the
+    // user reached for it mid-form.
+    setIngredients((current) => [...current, added.id]);
+  }
 
   // No interactive form before hydration (and, when editing, before the
   // prefill landed): early keystrokes or a premature Save must never vanish.
@@ -181,36 +230,75 @@ export function MealFormScreen({ mealId }: { mealId?: string }) {
           ))}
         </div>
 
-        <p className="mt-6 text-lg font-bold">
-          Needs <span className="text-sm font-normal text-muted">(from your pantry, optional)</span>
-        </p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {pantryItems.map((ing) => {
-            const selected = ingredients.includes(ing.id);
-            const inPantry = state?.pantry[ing.id] === true;
-            return (
-              <button
-                key={ing.id}
-                type="button"
-                aria-pressed={selected}
-                onClick={() =>
-                  setIngredients((current) =>
-                    selected ? current.filter((i) => i !== ing.id) : [...current, ing.id],
-                  )
-                }
-                className={
-                  selected
-                    ? "rounded-lg border border-green-deep bg-green-light px-3 py-2 text-xs font-bold"
-                    : inPantry
-                      ? "rounded-lg bg-surface px-3 py-2 text-xs font-bold shadow-sm"
-                      : "rounded-lg bg-surface px-3 py-2 text-xs font-bold text-muted shadow-sm"
-                }
-              >
-                {ing.name}
-              </button>
-            );
-          })}
+        <div className="mt-6 flex items-center justify-between">
+          <p className="text-lg font-bold">
+            Needs{" "}
+            <span className="text-sm font-normal text-muted">
+              {ingredients.length > 0 ? `(${ingredients.length} selected)` : "(optional)"}
+            </span>
+          </p>
+          <button
+            type="button"
+            data-testid="new-ingredient"
+            onClick={openSheet}
+            className="flex items-center gap-1 text-sm font-bold"
+          >
+            New item
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+              <rect x="3.5" y="3.5" width="17" height="17" rx="3" fill="none" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M12 8v8M8 12h8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </button>
         </div>
+        <input
+          type="search"
+          data-testid="ingredient-search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search items"
+          aria-label="Search items"
+          className="mt-2 w-full rounded-lg border border-line bg-surface px-4 py-2.5 text-sm outline-none focus:border-green-deep"
+        />
+        {grouped.length === 0 ? (
+          <p className="mt-4 text-sm text-muted">
+            Nothing matches. Add it as a new item instead.
+          </p>
+        ) : (
+          <div className="mt-4 flex flex-col gap-5">
+            {grouped.map((group) => (
+              <section key={group.id}>
+                <h2 className="text-sm font-bold text-muted">{group.label}</h2>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {group.items.map((ing) => {
+                    const selected = ingredients.includes(ing.id);
+                    const inPantry = state?.pantry[ing.id] === true;
+                    return (
+                      <button
+                        key={ing.id}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() =>
+                          setIngredients((current) =>
+                            selected ? current.filter((i) => i !== ing.id) : [...current, ing.id],
+                          )
+                        }
+                        className={
+                          selected
+                            ? "rounded-lg border border-green-deep bg-green-light px-3 py-2 text-xs font-bold"
+                            : inPantry
+                              ? "rounded-lg bg-surface px-3 py-2 text-xs font-bold shadow-sm"
+                              : "rounded-lg bg-surface px-3 py-2 text-xs font-bold text-muted shadow-sm"
+                        }
+                      >
+                        {ing.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
 
         <div className="fixed inset-x-0 bottom-0 z-10 mx-auto w-full max-w-md border-t border-line bg-surface px-6 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4">
           <button
@@ -222,6 +310,74 @@ export function MealFormScreen({ mealId }: { mealId?: string }) {
           </button>
         </div>
       </form>
+
+      <dialog
+        ref={dialogRef}
+        aria-label="Add a new item"
+        className="fixed inset-x-0 bottom-0 mt-auto w-full max-w-md rounded-t-3xl bg-surface p-6 backdrop:bg-black/35 [margin-inline:auto]"
+        onClick={(event) => {
+          if (event.target === dialogRef.current) dialogRef.current?.close();
+        }}
+      >
+        <form
+          method="dialog"
+          onSubmit={(event) => {
+            event.preventDefault();
+            addItem();
+          }}
+        >
+          <h2 className="text-[22px] font-bold">Add a new item</h2>
+
+          <label htmlFor="new-ingredient-name" className="mt-5 block text-base font-bold">
+            Name
+          </label>
+          <input
+            id="new-ingredient-name"
+            data-testid="new-ingredient-name"
+            value={newName}
+            onChange={(event) => setNewName(event.target.value)}
+            autoFocus
+            className="mt-2 w-full rounded-lg border border-line bg-surface px-4 py-3 text-sm outline-none focus:border-accent"
+          />
+          {addError ? (
+            <p data-testid="new-ingredient-error" className="mt-2 text-xs font-bold text-[#c0392b]">
+              {addError}
+            </p>
+          ) : null}
+
+          <p className="mt-5 text-base font-bold">Category</p>
+          <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label="Category">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                role="radio"
+                aria-checked={newCategory === cat.id}
+                onClick={() => setNewCategory(cat.id)}
+                className={
+                  newCategory === cat.id
+                    ? "rounded-lg border border-green-deep bg-green-light px-4 py-3 text-xs font-bold"
+                    : "rounded-lg border border-line bg-surface px-4 py-3 text-xs font-bold shadow-sm"
+                }
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          <p className="mt-4 text-xs text-muted">
+            It joins your pantry and gets selected for this meal.
+          </p>
+
+          <button
+            type="submit"
+            data-testid="save-new-ingredient"
+            className="mt-5 w-full rounded-lg bg-green-deep py-3.5 text-sm font-bold text-white"
+          >
+            Save
+          </button>
+        </form>
+      </dialog>
     </main>
   );
 }
