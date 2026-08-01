@@ -35,6 +35,7 @@ import {
   rolloverIfNeeded,
   saveState,
   setKidsEnabled,
+  setSeededMealHidden,
   setTakeawayDay,
   setView,
   shuffle,
@@ -574,6 +575,170 @@ describe("daily variety at rollover", () => {
     delete legacy.recent;
     const parsed = parseState(JSON.stringify(legacy), THURSDAY);
     expect(parsed.recent).toEqual({ family: [], kids: [] });
+  });
+});
+
+describe("hidden built-in meals", () => {
+  it("hiding removes the meal from both pools; showing restores it", () => {
+    let s = freshState(THURSDAY);
+    const result = setSeededMealHidden(s, "spaghetti-bolognese", true);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    s = result.state;
+    expect(s.hiddenSeededMeals).toContain("spaghetti-bolognese");
+    expect(fullIds("family", s.customMeals, s.hiddenSeededMeals)).not.toContain(
+      "spaghetti-bolognese",
+    );
+    expect(
+      eligibleIds("family", selectAll(s).pantry, s.customMeals, s.hiddenSeededMeals),
+    ).not.toContain("spaghetti-bolognese");
+    const shown = setSeededMealHidden(s, "spaghetti-bolognese", false);
+    expect(shown.ok).toBe(true);
+    if (!shown.ok) return;
+    expect(fullIds("family", shown.state.customMeals, shown.state.hiddenSeededMeals)).toContain(
+      "spaghetti-bolognese",
+    );
+  });
+
+  it("hiding tonight's dish re-picks it for free", () => {
+    let s = freshState(THURSDAY);
+    s = { ...s, today: { ...s.today, suggestionId: "spaghetti-bolognese" } };
+    const result = setSeededMealHidden(s, "spaghetti-bolognese", true);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state.today.suggestionId).not.toBe("spaghetti-bolognese");
+  });
+
+  it("refuses to hide the last visible meal of a view", () => {
+    let s: WawetState = { ...freshState(THURSDAY), customMeals: [] };
+    for (const meal of kidsMeals.slice(0, -1)) {
+      const result = setSeededMealHidden(s, meal.id, true);
+      expect(result.ok).toBe(true);
+      if (result.ok) s = result.state;
+    }
+    const last = kidsMeals[kidsMeals.length - 1];
+    const refused = setSeededMealHidden(s, last.id, true);
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) expect(refused.error).toMatch(/at least one/i);
+  });
+
+  it("rejects unknown, custom-meal, and Object.prototype ids", () => {
+    const s = freshState(THURSDAY);
+    expect(setSeededMealHidden(s, "not-a-meal", true).ok).toBe(false);
+    expect(setSeededMealHidden(s, s.customMeals[0].id, true).ok).toBe(false);
+    expect(setSeededMealHidden(s, "toString", true).ok).toBe(false);
+    expect(setSeededMealHidden(s, "constructor", true).ok).toBe(false);
+  });
+
+  it("rollover never deals a hidden meal", () => {
+    let s = freshState(new Date(2026, 0, 1, 12));
+    const hidden = ["spaghetti-bolognese", "chilli-con-carne", "burger-night", "toasties"];
+    for (const id of hidden) {
+      const result = setSeededMealHidden(s, id, true);
+      expect(result.ok).toBe(true);
+      if (result.ok) s = result.state;
+    }
+    for (let day = 2; day <= 60; day++) {
+      s = rolloverIfNeeded(s, new Date(2026, 0, day, 12));
+      expect(hidden).not.toContain(s.today.suggestionId);
+      expect(hidden).not.toContain(s.today.kidsSuggestionId);
+    }
+  });
+
+  it("shuffle only deals visible meals", () => {
+    let s: WawetState = { ...freshState(THURSDAY), customMeals: [] };
+    const keep = new Set(["spaghetti-bolognese", "chilli-con-carne"]);
+    for (const meal of familyMeals) {
+      if (keep.has(meal.id)) continue;
+      const result = setSeededMealHidden(s, meal.id, true);
+      expect(result.ok).toBe(true);
+      if (result.ok) s = result.state;
+    }
+    expect(canShuffle(s)).toBe(true);
+    while (canShuffle(s)) {
+      s = shuffle(s);
+      expect(keep.has(s.today.suggestionId)).toBe(true);
+    }
+  });
+
+  it("round-trips through parseState and drops junk ids", () => {
+    let s = freshState(THURSDAY);
+    const result = setSeededMealHidden(s, "spaghetti-bolognese", true);
+    if (result.ok) s = result.state;
+    const raw = JSON.stringify({
+      ...s,
+      hiddenSeededMeals: [...s.hiddenSeededMeals, "nope", 7, s.customMeals[0].id, "toString", "spaghetti-bolognese"],
+    });
+    const parsed = parseState(raw, THURSDAY);
+    expect(parsed.hiddenSeededMeals).toEqual(["spaghetti-bolognese"]);
+  });
+
+  it("parseState unhides a view that a persisted state emptied out", () => {
+    const s: WawetState = { ...freshState(THURSDAY), customMeals: [] };
+    const raw = JSON.stringify({
+      ...s,
+      hiddenSeededMeals: [...kidsMeals.map((m) => m.id), "spaghetti-bolognese"],
+    });
+    const parsed = parseState(raw, THURSDAY);
+    expect(fullIds("kids", parsed.customMeals, parsed.hiddenSeededMeals).length).toBeGreaterThan(0);
+    expect(parsed.hiddenSeededMeals).toEqual(["spaghetti-bolognese"]);
+  });
+
+  it("defaults to no hidden meals for pre-upgrade states", () => {
+    const s = freshState(THURSDAY);
+    const legacy = { ...s } as Record<string, unknown>;
+    delete legacy.hiddenSeededMeals;
+    const parsed = parseState(JSON.stringify(legacy), THURSDAY);
+    expect(parsed.hiddenSeededMeals).toEqual([]);
+  });
+
+  it("deleting the last custom meal of an all-hidden view restores its built-ins", () => {
+    let s: WawetState = { ...freshState(THURSDAY), customMeals: [] };
+    const added = addCustomMeal(s, { name: "Nikolay Special", kind: "kids", ingredients: [] });
+    expect(added.ok).toBe(true);
+    if (!added.ok) return;
+    s = added.state;
+    const custom = s.customMeals[0];
+    // With the custom kids meal present, every kids built-in may hide.
+    for (const meal of kidsMeals) {
+      const result = setSeededMealHidden(s, meal.id, true);
+      expect(result.ok).toBe(true);
+      if (result.ok) s = result.state;
+    }
+    // Point tonight's kids card at the custom meal, then delete it: the pool
+    // must never empty and the repair must not throw.
+    s = { ...s, today: { ...s.today, kidsSuggestionId: custom.id } };
+    const after = removeCustomMeal(s, custom.id);
+    expect(fullIds("kids", after.customMeals, after.hiddenSeededMeals).length).toBeGreaterThan(0);
+    expect(after.hiddenSeededMeals.every((id) => !kidsMeals.some((m) => m.id === id))).toBe(true);
+    expect(after.today.kidsSuggestionId).not.toBe(custom.id);
+    // A day later the rollover still deals cleanly.
+    expect(() => rolloverIfNeeded(after, new Date(2026, 6, 31, 12))).not.toThrow();
+  });
+
+  it("re-kinding the last custom meal of an all-hidden view restores its built-ins", () => {
+    let s: WawetState = { ...freshState(THURSDAY), customMeals: [] };
+    const added = addCustomMeal(s, { name: "Nikolay Special", kind: "kids", ingredients: [] });
+    expect(added.ok).toBe(true);
+    if (!added.ok) return;
+    s = added.state;
+    const custom = s.customMeals[0];
+    for (const meal of kidsMeals) {
+      const result = setSeededMealHidden(s, meal.id, true);
+      expect(result.ok).toBe(true);
+      if (result.ok) s = result.state;
+    }
+    const updated = updateCustomMeal(s, custom.id, {
+      name: custom.name,
+      kind: "family",
+      ingredients: [],
+    });
+    expect(updated.ok).toBe(true);
+    if (!updated.ok) return;
+    expect(
+      fullIds("kids", updated.state.customMeals, updated.state.hiddenSeededMeals).length,
+    ).toBeGreaterThan(0);
+    expect(() => rolloverIfNeeded(updated.state, new Date(2026, 6, 31, 12))).not.toThrow();
   });
 });
 
