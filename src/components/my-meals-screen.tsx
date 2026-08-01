@@ -31,13 +31,20 @@ export function MyMealsScreen() {
 
   const toggleHidden = (id: string, hidden: boolean) => {
     if (!state) return;
-    const result = setSeededMealHidden(state, id, hidden);
-    if (!result.ok) {
-      setError(result.error);
+    // Preflight against the render state decides the error message; the
+    // write itself re-runs inside a PURE updater against the freshest state,
+    // so a concurrent midnight rollover is never clobbered.
+    const preflight = setSeededMealHidden(state, id, hidden);
+    if (!preflight.ok) {
+      setError(preflight.error);
       return;
     }
     setError(null);
-    setState(result.state);
+    setState((s) => {
+      if (!s) return s;
+      const result = setSeededMealHidden(s, id, hidden);
+      return result.ok ? result.state : s;
+    });
   };
 
   const hiddenSet = new Set(state?.hiddenSeededMeals ?? []);

@@ -186,6 +186,12 @@ function pushRecent(list: string[], id: string): string[] {
   return [id, ...list.filter((x) => x !== id)].slice(0, RECENT_SUGGESTION_DAYS);
 }
 
+/** mealById lookup that cannot be fooled by Object.prototype keys: untrusted
+ * ids like "toString" must read as unknown, not as a built-in meal. */
+function seededMealFor(id: string) {
+  return Object.hasOwn(mealById, id) ? mealById[id] : undefined;
+}
+
 /**
  * Drop hidden entries for any view whose visible pool would otherwise be
  * empty. The deck must always hold at least one card per view or pick()
@@ -197,7 +203,7 @@ function dropHiddenForEmptyViews(hidden: string[], customMeals: CustomMeal[]): s
   let out = hidden;
   for (const kind of ["family", "kids"] as const) {
     if (fullIds(kind, customMeals, out).length === 0) {
-      out = out.filter((id) => mealById[id]?.kind !== kind);
+      out = out.filter((id) => seededMealFor(id)?.kind !== kind);
     }
   }
   return out;
@@ -406,7 +412,7 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
   const rawHidden: string[] = [];
   if (Array.isArray(parsed.hiddenSeededMeals)) {
     for (const id of parsed.hiddenSeededMeals) {
-      if (typeof id !== "string" || !mealById[id] || rawHidden.includes(id)) continue;
+      if (typeof id !== "string" || !seededMealFor(id) || rawHidden.includes(id)) continue;
       rawHidden.push(id);
     }
   }
@@ -767,7 +773,7 @@ export function setSeededMealHidden(
   id: string,
   hidden: boolean,
 ): SaveResult {
-  const meal = mealById[id];
+  const meal = seededMealFor(id);
   if (!meal) return { ok: false, error: "That meal no longer exists." };
   const isHidden = state.hiddenSeededMeals.includes(id);
   if (hidden === isHidden) return { ok: true, state };

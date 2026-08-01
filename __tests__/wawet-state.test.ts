@@ -622,10 +622,12 @@ describe("hidden built-in meals", () => {
     if (!refused.ok) expect(refused.error).toMatch(/at least one/i);
   });
 
-  it("rejects unknown and custom-meal ids", () => {
+  it("rejects unknown, custom-meal, and Object.prototype ids", () => {
     const s = freshState(THURSDAY);
     expect(setSeededMealHidden(s, "not-a-meal", true).ok).toBe(false);
     expect(setSeededMealHidden(s, s.customMeals[0].id, true).ok).toBe(false);
+    expect(setSeededMealHidden(s, "toString", true).ok).toBe(false);
+    expect(setSeededMealHidden(s, "constructor", true).ok).toBe(false);
   });
 
   it("rollover never deals a hidden meal", () => {
@@ -665,7 +667,7 @@ describe("hidden built-in meals", () => {
     if (result.ok) s = result.state;
     const raw = JSON.stringify({
       ...s,
-      hiddenSeededMeals: [...s.hiddenSeededMeals, "nope", 7, s.customMeals[0].id, "spaghetti-bolognese"],
+      hiddenSeededMeals: [...s.hiddenSeededMeals, "nope", 7, s.customMeals[0].id, "toString", "spaghetti-bolognese"],
     });
     const parsed = parseState(raw, THURSDAY);
     expect(parsed.hiddenSeededMeals).toEqual(["spaghetti-bolognese"]);

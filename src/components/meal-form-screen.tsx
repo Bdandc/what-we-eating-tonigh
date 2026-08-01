@@ -13,6 +13,7 @@ import {
 import {
   addCustomIngredient,
   addCustomMeal,
+  generateId,
   removeCustomMeal,
   updateCustomMeal,
 } from "@/lib/wawet-state";
@@ -112,18 +113,27 @@ export function MealFormScreen({ mealId }: { mealId?: string }) {
 
   function addItem() {
     if (!state) return;
-    const result = addCustomIngredient(state, newName, newCategory);
-    if (!result.ok) {
-      setAddError(result.error);
+    // Preflight against the render state decides the error message; the
+    // write itself re-runs inside a PURE updater against the freshest state,
+    // so a concurrent midnight rollover is never clobbered. The id is fixed
+    // up front so the updater stays deterministic under replay.
+    const preflight = addCustomIngredient(state, newName, newCategory);
+    if (!preflight.ok) {
+      setAddError(preflight.error);
       return;
     }
-    const added = result.state.customIngredients[result.state.customIngredients.length - 1];
+    const id = generateId();
     setAddError(null);
     dialogRef.current?.close();
-    setState(result.state);
+    setState((s) => {
+      if (!s) return s;
+      const result = addCustomIngredient(s, newName, newCategory, id);
+      return result.ok ? result.state : s;
+    });
     // The new item joins this meal's selection right away: that is why the
-    // user reached for it mid-form.
-    setIngredients((current) => [...current, added.id]);
+    // user reached for it mid-form. Save prunes unknown ids, so the selection
+    // stays safe even if the write above no-ops.
+    setIngredients((current) => [...current, id]);
   }
 
   // No interactive form before hydration (and, when editing, before the
