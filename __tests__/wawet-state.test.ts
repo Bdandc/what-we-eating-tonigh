@@ -12,6 +12,7 @@ import {
   MAX_CUSTOM_INGREDIENTS,
   MAX_CUSTOM_MEALS,
   MAX_SHUFFLES,
+  RECENT_SUGGESTION_DAYS,
   STORAGE_KEY,
   type WawetState,
   addCustomIngredient,
@@ -477,6 +478,102 @@ describe("rollover", () => {
     s = { ...s, settings: { ...s.settings, kidsEnabled: false } };
     const rolled = rolloverIfNeeded(s, THURSDAY);
     expect(rolled.today.view).toBe("family");
+  });
+});
+
+describe("daily variety at rollover", () => {
+  it("never deals yesterday's card again, in either view, across a full year", () => {
+    let s = freshState(new Date(2026, 0, 1, 12));
+    for (let day = 2; day <= 365; day++) {
+      const prevFamily = s.today.suggestionId;
+      const prevKids = s.today.kidsSuggestionId;
+      s = rolloverIfNeeded(s, new Date(2026, 0, day, 12));
+      expect(s.today.suggestionId).not.toBe(prevFamily);
+      expect(s.today.kidsSuggestionId).not.toBe(prevKids);
+    }
+  });
+
+  it("avoids everything in the recent window while the pool allows it", () => {
+    let s = freshState(new Date(2026, 0, 1, 12));
+    for (let day = 2; day <= 60; day++) {
+      const before = [s.today.suggestionId, ...s.recent.family];
+      s = rolloverIfNeeded(s, new Date(2026, 0, day, 12));
+      // Default pantry has 5 eligible family meals, so the recent window
+      // (3) can always be dodged without leaving the eligible pool.
+      expect(before.slice(0, RECENT_SUGGESTION_DAYS)).not.toContain(
+        s.today.suggestionId,
+      );
+    }
+  });
+
+  it("alternates inside a two-meal eligible pool instead of going off-pantry", () => {
+    let s = freshState(new Date(2026, 0, 1, 12));
+    const pantry: Record<string, boolean> = Object.create(null);
+    for (const k of Object.keys(s.pantry)) pantry[k] = false;
+    for (const k of ["beef-mince", "pasta", "rice"]) pantry[k] = true;
+    s = commitPantry({ ...s, pantry });
+    const eligible = new Set(eligibleIds("family", s.pantry, s.customMeals));
+    expect(eligible.size).toBeGreaterThanOrEqual(2);
+    for (let day = 2; day <= 30; day++) {
+      const prev = s.today.suggestionId;
+      s = rolloverIfNeeded(s, new Date(2026, 0, day, 12));
+      expect(s.today.suggestionId).not.toBe(prev);
+      expect(eligible.has(s.today.suggestionId)).toBe(true);
+    }
+  });
+
+  it("extends past the pantry rather than repeating a lone eligible meal", () => {
+    let s = freshState(new Date(2026, 0, 1, 12));
+    const pantry: Record<string, boolean> = Object.create(null);
+    for (const k of Object.keys(s.pantry)) pantry[k] = false;
+    for (const k of ["beef-mince", "pasta"]) pantry[k] = true;
+    s = commitPantry({ ...s, pantry });
+    expect(eligibleIds("family", s.pantry, s.customMeals)).toHaveLength(1);
+    for (let day = 2; day <= 10; day++) {
+      const prev = s.today.suggestionId;
+      s = rolloverIfNeeded(s, new Date(2026, 0, day, 12));
+      expect(s.today.suggestionId).not.toBe(prev);
+    }
+  });
+
+  it("is deterministic: identical states roll to the identical card", () => {
+    const a = rolloverIfNeeded(freshState(TUESDAY), THURSDAY);
+    const b = rolloverIfNeeded(freshState(TUESDAY), THURSDAY);
+    expect(a.today.suggestionId).toBe(b.today.suggestionId);
+    expect(a.today.kidsSuggestionId).toBe(b.today.kidsSuggestionId);
+  });
+
+  it("caps the recent list and round-trips it through parseState", () => {
+    let s = freshState(new Date(2026, 0, 1, 12));
+    for (let day = 2; day <= 8; day++) {
+      s = rolloverIfNeeded(s, new Date(2026, 0, day, 12));
+    }
+    expect(s.recent.family).toHaveLength(RECENT_SUGGESTION_DAYS);
+    expect(s.recent.kids).toHaveLength(RECENT_SUGGESTION_DAYS);
+    const parsed = parseState(JSON.stringify(s), new Date(2026, 0, 8, 12));
+    expect(parsed.recent).toEqual(s.recent);
+  });
+
+  it("drops junk from a persisted recent list", () => {
+    const s = freshState(THURSDAY);
+    const raw = JSON.stringify({
+      ...s,
+      recent: {
+        family: ["not-a-meal", 5, s.today.suggestionId, s.today.suggestionId],
+        kids: "nonsense",
+      },
+    });
+    const parsed = parseState(raw, THURSDAY);
+    expect(parsed.recent.family).toEqual([s.today.suggestionId]);
+    expect(parsed.recent.kids).toEqual([]);
+  });
+
+  it("defaults to an empty recent list for pre-upgrade states", () => {
+    const s = freshState(THURSDAY);
+    const legacy = { ...s } as Record<string, unknown>;
+    delete legacy.recent;
+    const parsed = parseState(JSON.stringify(legacy), THURSDAY);
+    expect(parsed.recent).toEqual({ family: [], kids: [] });
   });
 });
 

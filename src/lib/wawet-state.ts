@@ -41,6 +41,12 @@ export type Settings = {
   kidsEnabled: boolean;
 };
 
+/** Meal ids dealt on previous days, most recent first, per view. */
+export type RecentSuggestions = {
+  family: string[];
+  kids: string[];
+};
+
 export type WawetState = {
   version: 1;
   today: TodayState;
@@ -49,12 +55,14 @@ export type WawetState = {
   customMeals: CustomMeal[];
   /** One-time starter seeding marker: once true, deleted starters STAY deleted. */
   startersSeeded: boolean;
+  recent: RecentSuggestions;
   settings: Settings;
 };
 
 export const STORAGE_KEY = "wawet-state-v1";
 export const LEGACY_STORAGE_KEY = "dinner-time-next-state-v3";
 export const MAX_SHUFFLES = 3;
+export const RECENT_SUGGESTION_DAYS = 3;
 export const MAX_CUSTOM_INGREDIENTS = 200;
 export const MAX_INGREDIENT_NAME_LENGTH = 60;
 export const MAX_CUSTOM_MEALS = 100;
@@ -156,6 +164,38 @@ function dailyPick(
   return pick(activeIds(kind, pantry, customMeals), `${date}:${kind}:${salt}`);
 }
 
+/** Prepend today's dealt id to the recent list, most recent first, capped. */
+function pushRecent(list: string[], id: string): string[] {
+  return [id, ...list.filter((x) => x !== id)].slice(0, RECENT_SUGGESTION_DAYS);
+}
+
+/**
+ * New-day pick that avoids recently dealt meals. Pantry-matched meals come
+ * first, but a repeat of yesterday is the LAST resort: the pick extends past
+ * the pantry (exactly like the shuffle does) before it ever re-deals
+ * yesterday's card. Only a single-meal library can force a repeat.
+ */
+function varietyPick(
+  kind: MealKind,
+  pantry: Record<string, boolean>,
+  customMeals: CustomMeal[],
+  recent: string[],
+  date: string,
+): string {
+  const eligible = eligibleIds(kind, pantry, customMeals);
+  const full = fullIds(kind, customMeals);
+  const recentSet = new Set(recent);
+  const yesterday = recent[0];
+  const pool =
+    [
+      eligible.filter((id) => !recentSet.has(id)),
+      eligible.filter((id) => id !== yesterday),
+      full.filter((id) => !recentSet.has(id)),
+      full.filter((id) => id !== yesterday),
+    ].find((p) => p.length > 0) ?? (eligible.length > 0 ? eligible : full);
+  return pick(pool, `${date}:${kind}:0`);
+}
+
 /** Resolve a meal id against the seeded library and the user's own meals. */
 export function resolveMeal(state: WawetState, id: string) {
   return mealById[id] ?? state.customMeals.find((meal) => meal.id === id) ?? null;
@@ -192,6 +232,7 @@ export function freshState(now: Date = new Date()): WawetState {
     customIngredients: [],
     customMeals: starterMeals.map((m) => ({ ...m, ingredients: [...m.ingredients] })),
     startersSeeded: true,
+    recent: { family: [], kids: [] },
     settings: { takeawayDay: "Tuesday", kidsEnabled: true },
   };
 }
@@ -323,6 +364,25 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
     startersSeeded = true;
   }
 
+  // Recent suggestions: known meal ids only, deduped, capped. A missing or
+  // malformed history costs nothing worse than a possible repeat tomorrow.
+  const rawRecent = isRecord(parsed.recent) ? parsed.recent : {};
+  const readRecent = (kind: MealKind, value: unknown): string[] => {
+    if (!Array.isArray(value)) return [];
+    const known = new Set(fullIds(kind, customMeals));
+    const out: string[] = [];
+    for (const id of value) {
+      if (typeof id !== "string" || !known.has(id) || out.includes(id)) continue;
+      out.push(id);
+      if (out.length >= RECENT_SUGGESTION_DAYS) break;
+    }
+    return out;
+  };
+  const recent: RecentSuggestions = {
+    family: readRecent("family", rawRecent.family),
+    kids: readRecent("kids", rawRecent.kids),
+  };
+
   // Today
   const date = typeof rawToday.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(rawToday.date)
     ? rawToday.date
@@ -360,6 +420,7 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
     customIngredients,
     customMeals,
     startersSeeded,
+    recent,
     settings: { takeawayDay, kidsEnabled },
   };
 
@@ -373,12 +434,19 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
 export function rolloverIfNeeded(state: WawetState, now: Date = new Date()): WawetState {
   const date = todayLocalDate(now);
   if (state.today.date === date) return state;
+  // Yesterday's cards join the recent list so the new day never re-deals them
+  // while an alternative exists (see varietyPick).
+  const recent: RecentSuggestions = {
+    family: pushRecent(state.recent.family, state.today.suggestionId),
+    kids: pushRecent(state.recent.kids, state.today.kidsSuggestionId),
+  };
   return {
     ...state,
+    recent,
     today: {
       date,
-      suggestionId: dailyPick("family", state.pantry, state.customMeals, date, 0),
-      kidsSuggestionId: dailyPick("kids", state.pantry, state.customMeals, date, 0),
+      suggestionId: varietyPick("family", state.pantry, state.customMeals, recent.family, date),
+      kidsSuggestionId: varietyPick("kids", state.pantry, state.customMeals, recent.kids, date),
       shufflesUsed: 0,
       view: state.settings.kidsEnabled ? state.today.view : "family",
       takeawaySkipped: false,
