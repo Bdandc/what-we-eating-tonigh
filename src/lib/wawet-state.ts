@@ -187,6 +187,23 @@ function pushRecent(list: string[], id: string): string[] {
 }
 
 /**
+ * Drop hidden entries for any view whose visible pool would otherwise be
+ * empty. The deck must always hold at least one card per view or pick()
+ * dies, and the pool can shrink through more doors than the hide toggle:
+ * deleting or re-kinding the last custom meal of a view, and persisted
+ * states, all funnel through this same rule.
+ */
+function dropHiddenForEmptyViews(hidden: string[], customMeals: CustomMeal[]): string[] {
+  let out = hidden;
+  for (const kind of ["family", "kids"] as const) {
+    if (fullIds(kind, customMeals, out).length === 0) {
+      out = out.filter((id) => mealById[id]?.kind !== kind);
+    }
+  }
+  return out;
+}
+
+/**
  * New-day pick that avoids recently dealt meals. Pantry-matched meals come
  * first, but a repeat of yesterday is the LAST resort: the pick extends past
  * the pantry (exactly like the shuffle does) before it ever re-deals
@@ -386,20 +403,14 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
   // Hidden built-ins: known seeded ids only, deduped. A view whose every
   // visible meal would vanish gets its hidden entries dropped instead: the
   // deck must always hold at least one card per view or pick() dies.
-  const hiddenSeededMeals: string[] = [];
+  const rawHidden: string[] = [];
   if (Array.isArray(parsed.hiddenSeededMeals)) {
     for (const id of parsed.hiddenSeededMeals) {
-      if (typeof id !== "string" || !mealById[id] || hiddenSeededMeals.includes(id)) continue;
-      hiddenSeededMeals.push(id);
+      if (typeof id !== "string" || !mealById[id] || rawHidden.includes(id)) continue;
+      rawHidden.push(id);
     }
   }
-  for (const kind of ["family", "kids"] as const) {
-    if (fullIds(kind, customMeals, hiddenSeededMeals).length === 0) {
-      for (let i = hiddenSeededMeals.length - 1; i >= 0; i--) {
-        if (mealById[hiddenSeededMeals[i]]?.kind === kind) hiddenSeededMeals.splice(i, 1);
-      }
-    }
-  }
+  const hiddenSeededMeals = dropHiddenForEmptyViews(rawHidden, customMeals);
 
   // Recent suggestions: known meal ids only, deduped, capped. A missing or
   // malformed history costs nothing worse than a possible repeat tomorrow.
@@ -710,10 +721,16 @@ export function updateCustomMeal(
       m.id === id ? { id, name, description, kind: input.kind, ingredients } : m,
     ),
   };
+  // A kind change can empty the old view (all built-ins hidden, this was the
+  // last custom meal there): restore that view's built-ins before repairing.
+  const guarded = {
+    ...next,
+    hiddenSeededMeals: dropHiddenForEmptyViews(next.hiddenSeededMeals, next.customMeals),
+  };
   // TARGETED repair only: a kind change can strand this meal's own stored
   // suggestion in the wrong view's pool. Blanket revalidation would also
   // replace intentionally dealt off-pantry suggestions on unrelated edits.
-  return { ok: true, state: repairSuggestionForMeal(next, id) };
+  return { ok: true, state: repairSuggestionForMeal(guarded, id) };
 }
 
 /** Re-pick a view's suggestion ONLY if it points at this meal and the meal
@@ -771,9 +788,15 @@ export function setSeededMealHidden(
 export function removeCustomMeal(state: WawetState, id: string): WawetState {
   if (!state.customMeals.some((m) => m.id === id)) return state;
   const next = { ...state, customMeals: state.customMeals.filter((m) => m.id !== id) };
+  // Deleting the last custom meal of a view whose built-ins are all hidden
+  // would empty the pool: restore that view's built-ins first.
+  const guarded = {
+    ...next,
+    hiddenSeededMeals: dropHiddenForEmptyViews(next.hiddenSeededMeals, next.customMeals),
+  };
   // If the removed meal is tonight's suggestion in either view, re-pick for
   // free - and touch nothing else (see repairSuggestionForMeal).
-  return repairSuggestionForMeal(next, id);
+  return repairSuggestionForMeal(guarded, id);
 }
 
 export function addCustomIngredient(

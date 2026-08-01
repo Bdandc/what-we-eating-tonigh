@@ -30,16 +30,14 @@ export function MyMealsScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const toggleHidden = (id: string, hidden: boolean) => {
+    if (!state) return;
+    const result = setSeededMealHidden(state, id, hidden);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
     setError(null);
-    setState((s) => {
-      if (!s) return s;
-      const result = setSeededMealHidden(s, id, hidden);
-      if (!result.ok) {
-        setError(result.error);
-        return s;
-      }
-      return result.state;
-    });
+    setState(result.state);
   };
 
   const hiddenSet = new Set(state?.hiddenSeededMeals ?? []);

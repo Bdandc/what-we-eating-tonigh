@@ -689,6 +689,55 @@ describe("hidden built-in meals", () => {
     const parsed = parseState(JSON.stringify(legacy), THURSDAY);
     expect(parsed.hiddenSeededMeals).toEqual([]);
   });
+
+  it("deleting the last custom meal of an all-hidden view restores its built-ins", () => {
+    let s: WawetState = { ...freshState(THURSDAY), customMeals: [] };
+    const added = addCustomMeal(s, { name: "Nikolay Special", kind: "kids", ingredients: [] });
+    expect(added.ok).toBe(true);
+    if (!added.ok) return;
+    s = added.state;
+    const custom = s.customMeals[0];
+    // With the custom kids meal present, every kids built-in may hide.
+    for (const meal of kidsMeals) {
+      const result = setSeededMealHidden(s, meal.id, true);
+      expect(result.ok).toBe(true);
+      if (result.ok) s = result.state;
+    }
+    // Point tonight's kids card at the custom meal, then delete it: the pool
+    // must never empty and the repair must not throw.
+    s = { ...s, today: { ...s.today, kidsSuggestionId: custom.id } };
+    const after = removeCustomMeal(s, custom.id);
+    expect(fullIds("kids", after.customMeals, after.hiddenSeededMeals).length).toBeGreaterThan(0);
+    expect(after.hiddenSeededMeals.every((id) => !kidsMeals.some((m) => m.id === id))).toBe(true);
+    expect(after.today.kidsSuggestionId).not.toBe(custom.id);
+    // A day later the rollover still deals cleanly.
+    expect(() => rolloverIfNeeded(after, new Date(2026, 6, 31, 12))).not.toThrow();
+  });
+
+  it("re-kinding the last custom meal of an all-hidden view restores its built-ins", () => {
+    let s: WawetState = { ...freshState(THURSDAY), customMeals: [] };
+    const added = addCustomMeal(s, { name: "Nikolay Special", kind: "kids", ingredients: [] });
+    expect(added.ok).toBe(true);
+    if (!added.ok) return;
+    s = added.state;
+    const custom = s.customMeals[0];
+    for (const meal of kidsMeals) {
+      const result = setSeededMealHidden(s, meal.id, true);
+      expect(result.ok).toBe(true);
+      if (result.ok) s = result.state;
+    }
+    const updated = updateCustomMeal(s, custom.id, {
+      name: custom.name,
+      kind: "family",
+      ingredients: [],
+    });
+    expect(updated.ok).toBe(true);
+    if (!updated.ok) return;
+    expect(
+      fullIds("kids", updated.state.customMeals, updated.state.hiddenSeededMeals).length,
+    ).toBeGreaterThan(0);
+    expect(() => rolloverIfNeeded(updated.state, new Date(2026, 6, 31, 12))).not.toThrow();
+  });
 });
 
 describe("parseState (untrusted input)", () => {
