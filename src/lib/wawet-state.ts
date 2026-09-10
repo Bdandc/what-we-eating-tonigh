@@ -72,7 +72,9 @@ export const MAX_MEAL_DESCRIPTION_LENGTH = 200;
 
 const CUSTOM_ID_RE =
   /^c-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const CUSTOM_MEAL_ID_RE =
+/** Custom meal id grammar. Exported as the single source of truth: the
+ * recipe page validates route ids against this exact regex. */
+export const CUSTOM_MEAL_ID_RE =
   /^m-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function stripControl(value: string): string {
@@ -237,9 +239,11 @@ function varietyPick(
   return pick(pool, `${date}:${kind}:0`);
 }
 
-/** Resolve a meal id against the seeded library and the user's own meals. */
+/** Resolve a meal id against the seeded library and the user's own meals.
+ * Prototype-safe: the recipe route feeds this URL-supplied ids, so a bare
+ * mealById[id] would resolve "constructor" to a Function and crash callers. */
 export function resolveMeal(state: WawetState, id: string) {
-  return mealById[id] ?? state.customMeals.find((meal) => meal.id === id) ?? null;
+  return seededMealFor(id) ?? state.customMeals.find((meal) => meal.id === id) ?? null;
 }
 
 // ---------------------------------------------------------------------------

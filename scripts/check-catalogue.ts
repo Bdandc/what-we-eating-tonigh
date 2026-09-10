@@ -15,8 +15,12 @@ import {
   meals,
   seededIngredients,
 } from "../src/lib/wawet-data";
+import { recipes, validateRecipes } from "../src/lib/wawet-recipes";
 
 const problems: string[] = [];
+
+// 0. Every built-in meal must carry a recipe, and nothing else may.
+problems.push(...validateRecipes(meals, recipes));
 const known = new Set(seededIngredients.map((i) => i.id));
 const used = new Set(meals.flatMap((m) => m.ingredients));
 

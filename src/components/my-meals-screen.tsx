@@ -110,12 +110,16 @@ export function MyMealsScreen() {
                   key={meal.id}
                   className={`flex items-center justify-between rounded-xl bg-surface px-4 py-4 shadow-sm ${hidden ? "opacity-50" : ""}`}
                 >
-                  <span className="text-sm font-bold">
+                  <Link
+                    href={`/recipe/${meal.id}?from=meals`}
+                    data-testid={`recipe-${meal.id}`}
+                    className="text-sm font-bold"
+                  >
                     {meal.name}
                     <span className="ml-3 font-normal text-muted">
                       {meal.kind === "kids" ? "Kids" : "Family"}
                     </span>
-                  </span>
+                  </Link>
                   <button
                     type="button"
                     data-testid={`toggle-${meal.id}`}

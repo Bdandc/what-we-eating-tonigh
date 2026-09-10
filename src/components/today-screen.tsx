@@ -315,6 +315,16 @@ function TodayCard({
               {meal?.name ?? "Dinner"}
             </h2>
             <p className="mt-4 text-xs leading-5 text-muted">{meal?.description}</p>
+            {meal ? (
+              <Link
+                href={`/recipe/${view === "family" ? state.today.suggestionId : state.today.kidsSuggestionId}`}
+                data-testid="recipe-link"
+                draggable={false}
+                className="mt-4 flex items-center gap-2 text-xs font-bold text-foreground"
+              >
+                <span className="underline underline-offset-2">How to cook it</span>
+              </Link>
+            ) : null}
             {offPantry ? (
               <Link
                 href="/pantry"
