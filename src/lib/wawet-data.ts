@@ -57,7 +57,7 @@ export const seededIngredients: Ingredient[] = [
   // Proteins
   { id: "chicken", name: "Chicken", category: "protein" },
   { id: "beef-mince", name: "Beef mince", category: "protein" },
-  { id: "beef-steak", name: "Steak", category: "protein" },
+  { id: "beef-steak", name: "Beef steak", category: "protein" },
   { id: "pork", name: "Pork", category: "protein" },
   { id: "sausages", name: "Sausages", category: "protein" },
   { id: "bacon", name: "Bacon", category: "protein" },
@@ -66,7 +66,6 @@ export const seededIngredients: Ingredient[] = [
   { id: "prawns", name: "Prawns", category: "protein" },
   { id: "eggs", name: "Eggs", category: "protein" },
   { id: "tinned-tuna", name: "Tinned tuna", category: "protein" },
-  { id: "chickpeas", name: "Chickpeas", category: "protein" },
   { id: "lentils", name: "Lentils", category: "protein" },
   { id: "breaded-chicken-steak", name: "Breaded chicken steak", category: "protein" },
   { id: "chicken-nuggets-item", name: "Chicken nuggets", category: "protein" },
@@ -94,6 +93,7 @@ export const seededIngredients: Ingredient[] = [
   { id: "sweet-potato", name: "Sweet potato", category: "sides" },
   { id: "bread", name: "Bread", category: "sides" },
   { id: "wraps", name: "Wraps", category: "sides" },
+  { id: "mini-pizza", name: "Pizza bases", category: "sides" },
 
   // Dairy & tins
   { id: "cheese", name: "Cheese", category: "misc" },
@@ -101,9 +101,10 @@ export const seededIngredients: Ingredient[] = [
   { id: "cream", name: "Cream", category: "misc" },
   { id: "tinned-tomatoes", name: "Tinned tomatoes", category: "misc" },
   { id: "baked-beans", name: "Baked beans", category: "misc" },
+  { id: "chickpeas", name: "Chickpeas", category: "misc" },
+  { id: "tinned-soup", name: "Tinned soup", category: "misc" },
   { id: "coconut-milk", name: "Coconut milk", category: "misc" },
   { id: "feta", name: "Feta", category: "misc" },
-  { id: "mini-pizza", name: "Mini pizza bases", category: "misc" },
 ];
 
 /**
@@ -132,7 +133,7 @@ export const meals: Meal[] = [
   // effect and the "nothing matches" fallback notice means something.
   // -------------------------------------------------------------------------
   { id: "spaghetti-bolognese", name: "Spaghetti Bolognese", description: "Slow-cooked mince ragu, plenty of parmesan, garlic bread on the side.", kind: "family", ingredients: ["beef-mince", "pasta"] },
-  { id: "lasagna-night", name: "Lasagna", description: "Layered, bubbling, and perfect with a big green salad.", kind: "family", ingredients: ["beef-mince", "pasta", "cheese"] },
+  { id: "lasagna-night", name: "Lasagne", description: "Layered, bubbling, and perfect with a big green salad.", kind: "family", ingredients: ["beef-mince", "pasta", "cheese"] },
   { id: "chilli-con-carne", name: "Chilli con Carne", description: "Smoky, slow-simmered chilli over rice with soured cream.", kind: "family", ingredients: ["beef-mince", "rice"] },
   { id: "burger-night", name: "Burger Night", description: "Juicy burgers, crisp fries, and a good excuse for extra sauce.", kind: "family", ingredients: ["beef-mince", "bread"] },
   { id: "cottage-pie", name: "Cottage Pie", description: "Rich mince under a golden mash lid. Proper cold-weather food.", kind: "family", ingredients: ["beef-mince", "potatoes"] },
@@ -143,7 +144,7 @@ export const meals: Meal[] = [
   { id: "butter-chicken", name: "Butter Chicken", description: "Rich, creamy curry with rice and cucumber raita.", kind: "family", ingredients: ["chicken", "rice"] },
   { id: "thai-green-curry", name: "Thai Green Curry", description: "Fragrant coconut curry with steamed rice and lots of fresh herbs.", kind: "family", ingredients: ["chicken", "coconut-milk", "rice"] },
   { id: "chicken-fajitas", name: "Chicken Fajitas", description: "Sizzling peppers, charred chicken, and warm wraps for the table.", kind: "family", ingredients: ["chicken", "peppers", "wraps"] },
-  { id: "caesar-salad", name: "Caesar Salad", description: "Crunchy leaves, croutons, parmesan, and lemony chicken on top.", kind: "family", ingredients: ["chicken", "lettuce"] },
+  { id: "caesar-salad", name: "Caesar Salad", description: "Crunchy leaves, croutons, parmesan, and lemony chicken on top.", kind: "family", ingredients: ["chicken", "lettuce", "cheese"] },
   { id: "chicken-stir-fry", name: "Chicken Stir-fry", description: "Everything in one wok, on the table in fifteen minutes.", kind: "family", ingredients: ["chicken", "noodles", "peppers"] },
   { id: "katsu-curry", name: "Katsu Curry", description: "Crisp breaded chicken, mild golden sauce, and steamed rice.", kind: "family", ingredients: ["breaded-chicken-steak", "rice"] },
   { id: "chicken-steak-chips", name: "Chicken Steak and Chips", description: "Breaded chicken steak, oven chips, and whichever sauce wins.", kind: "family", ingredients: ["breaded-chicken-steak", "chips"] },
@@ -161,7 +162,7 @@ export const meals: Meal[] = [
   { id: "blt", name: "BLT Night", description: "Crisp bacon, cold lettuce, tomato, thick bread. Stack them high.", kind: "family", ingredients: ["bacon", "bread", "tomato"] },
   { id: "pork-chops", name: "Pork Chops", description: "Pan-fried chops with apple sauce and crushed potatoes.", kind: "family", ingredients: ["pork", "potatoes"] },
   { id: "sweet-sour-pork", name: "Sweet and Sour Pork", description: "Sticky pork with peppers and pineapple over rice.", kind: "family", ingredients: ["pork", "rice", "peppers"] },
-  { id: "pizza-night", name: "Pizza Night", description: "Stone-baked, mozzarella pulled to the edges, chilli oil on top.", kind: "family", ingredients: ["mozzarella", "tinned-tomatoes"] },
+  { id: "pizza-night", name: "Pizza Night", description: "Stone-baked, mozzarella pulled to the edges, chilli oil on top.", kind: "family", ingredients: ["mozzarella", "tinned-tomatoes", "mini-pizza"] },
   { id: "creamy-mushroom-pasta", name: "Creamy Mushroom Pasta", description: "Garlicky mushrooms, cream, and a shower of parmesan.", kind: "family", ingredients: ["mushrooms", "cream", "pasta"] },
   { id: "mushroom-risotto", name: "Mushroom Risotto", description: "Slow-stirred, deeply savoury, worth standing at the hob for.", kind: "family", ingredients: ["mushrooms", "rice"] },
   { id: "chickpea-curry", name: "Chickpea and Sweet Potato Curry", description: "Warm, spiced, and better the next day.", kind: "family", ingredients: ["chickpeas", "sweet-potato", "rice"] },
@@ -174,7 +175,7 @@ export const meals: Meal[] = [
   { id: "jacket-potatoes", name: "Jacket Potatoes", description: "Crisp skins, fluffy middles, beans and cheese piled on.", kind: "family", ingredients: ["potatoes", "cheese", "baked-beans"] },
   { id: "loaded-wedges", name: "Loaded Wedges", description: "Wedges under melted cheese with soured cream and spring onion.", kind: "family", ingredients: ["wedges", "cheese"] },
   { id: "greek-salad", name: "Greek Salad", description: "Tomato, cucumber, olives, and a thick slab of feta.", kind: "family", ingredients: ["cucumber", "tomato", "feta"] },
-  { id: "soup-toasties", name: "Soup and Toasties", description: "Something cosy and simple before the next week begins.", kind: "family", ingredients: ["bread", "cheese"] },
+  { id: "soup-toasties", name: "Soup and Toasties", description: "Something cosy and simple before the next week begins.", kind: "family", ingredients: ["bread", "cheese", "tinned-soup"] },
   { id: "sweetcorn-chowder", name: "Sweetcorn Chowder", description: "Thick, sweet, and creamy with plenty of black pepper.", kind: "family", ingredients: ["sweetcorn", "potatoes", "cream"] },
 
   // -------------------------------------------------------------------------
@@ -183,7 +184,7 @@ export const meals: Meal[] = [
   { id: "chicken-nuggets", name: "Nuggets and Chips", description: "Crispy nuggets, oven chips, cucumber sticks, and ketchup.", kind: "kids", ingredients: ["chicken-nuggets-item", "chips"] },
   { id: "nuggets-sweet-potato", name: "Nuggets and Sweet Potato Fries", description: "The same favourite, orange edition.", kind: "kids", ingredients: ["chicken-nuggets-item", "sweet-potato"] },
   { id: "fish-fingers", name: "Fish Fingers and Mash", description: "Golden fish fingers with buttery mash and sweetcorn.", kind: "kids", ingredients: ["fish-fingers-item", "potatoes", "sweetcorn"] },
-  { id: "cheesy-pasta", name: "Cheesy Pasta", description: "Short pasta in a creamy cheese sauce. The reliable one.", kind: "kids", ingredients: ["pasta", "cheese"] },
+  { id: "cheesy-pasta", name: "Cheesy Pasta Bake with Peas", description: "Short pasta baked in a creamy cheese sauce with sweet peas stirred through. The reliable one.", kind: "kids", ingredients: ["pasta", "cheese", "garden-peas"] },
   { id: "mac-cheese", name: "Mac and Cheese", description: "Creamy macaroni bake with a crunchy golden top.", kind: "kids", ingredients: ["pasta", "cheese"] },
   { id: "pasta-bake", name: "Pasta Bake", description: "Baked pasta, tomato sauce, and a mozzarella lid.", kind: "kids", ingredients: ["pasta", "tinned-tomatoes", "mozzarella"] },
   { id: "mini-pizzas", name: "Mini Pizzas", description: "Little pizzas with simple toppings and lots of melted cheese.", kind: "kids", ingredients: ["mini-pizza", "mozzarella"] },
