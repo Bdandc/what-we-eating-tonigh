@@ -9,7 +9,7 @@ import {
   CATEGORIES,
   seededIngredients,
 } from "@/lib/wawet-data";
-import { addCustomIngredient, applyPantryOverrides } from "@/lib/wawet-state";
+import { addCustomIngredient, applyPantryOverrides, generateId } from "@/lib/wawet-state";
 import { useWawet } from "@/components/use-wawet";
 
 const CHIP_LIMIT = 8;
@@ -67,16 +67,22 @@ export function PantryScreen() {
     if (!state) return;
     // Adding an item creates the entity immediately (it is a thing you own,
     // not a tick); its selected state joins the draft like any other chip.
-    const result = addCustomIngredient(state, name, category);
-    if (!result.ok) {
-      setError(result.error);
+    // Preflight against the render state decides the error; the write re-runs
+    // inside a PURE updater against the freshest state with a fixed id.
+    const id = generateId();
+    const preflight = addCustomIngredient(state, name, category, id);
+    if (!preflight.ok) {
+      setError(preflight.error);
       return;
     }
-    const added = result.state.customIngredients[result.state.customIngredients.length - 1];
     setError(null);
     closeSheet();
-    setState(result.state);
-    setOverrides((current) => ({ ...current, [added.id]: true }));
+    setState((s) => {
+      if (!s) return s;
+      const result = addCustomIngredient(s, name, category, id);
+      return result.ok ? result.state : s;
+    });
+    setOverrides((current) => ({ ...current, [id]: true }));
   }
 
   return (

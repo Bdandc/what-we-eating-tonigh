@@ -14,6 +14,7 @@ import {
   addCustomIngredient,
   addCustomMeal,
   generateId,
+  generateMealId,
   removeCustomMeal,
   updateCustomMeal,
 } from "@/lib/wawet-state";
@@ -67,16 +68,25 @@ export function MealFormScreen({ mealId }: { mealId?: string }) {
 
   function save() {
     if (!state) return;
-    // Outside the updater: router.push schedules its own React update.
-    const result = mealId
-      ? updateCustomMeal(state, mealId, { name, description, kind, ingredients })
-      : addCustomMeal(state, { name, description, kind, ingredients });
-    if (!result.ok) {
-      setError(result.error);
+    // Preflight against the render state decides the error and whether to
+    // navigate; the write re-runs inside a PURE updater against the freshest
+    // state. The new id is fixed up front so the updater stays deterministic.
+    const input = { name, description, kind, ingredients };
+    const id = mealId ?? generateMealId();
+    const preflight = mealId
+      ? updateCustomMeal(state, mealId, input)
+      : addCustomMeal(state, input, id);
+    if (!preflight.ok) {
+      setError(preflight.error);
       return;
     }
     setError(null);
-    setState(result.state);
+    setState((s) => {
+      if (!s) return s;
+      const result = mealId ? updateCustomMeal(s, mealId, input) : addCustomMeal(s, input, id);
+      return result.ok ? result.state : s;
+    });
+    // Outside the updater: router.push schedules its own React update.
     router.push("/meals");
   }
 
@@ -88,7 +98,7 @@ export function MealFormScreen({ mealId }: { mealId?: string }) {
       setArmedDelete(true);
       return;
     }
-    setState(removeCustomMeal(state, mealId));
+    setState((s) => (s ? removeCustomMeal(s, mealId) : s));
     router.push("/meals");
   }
 
