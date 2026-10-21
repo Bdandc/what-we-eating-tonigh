@@ -69,8 +69,12 @@ export function useSwipeShuffle(
         // A committed swipe swaps the cards at once; keep transitions off for
         // two frames so the under-card snaps to rest instead of easing down
         // from mid-drag (the visible jitter), then hand back to CSS.
+        // Deeper layers are exempt (deck-committed): they glide up one step.
+        deck.classList.add("deck-committed");
         requestAnimationFrame(() =>
-          requestAnimationFrame(() => deck.classList.remove("deck-dragging")),
+          requestAnimationFrame(() =>
+            deck.classList.remove("deck-dragging", "deck-committed"),
+          ),
         );
       } else {
         deck.classList.remove("deck-dragging");

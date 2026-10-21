@@ -15,13 +15,13 @@ import {
   skipTakeaway,
   weekdayName,
 } from "@/lib/wawet-state";
-import { createCommitGuard } from "@/lib/swipe";
+import { createCommitGuard, deckLayerCount, swipesLeftLabel } from "@/lib/swipe";
 import { useWawet } from "@/components/use-wawet";
 import { type ReleasePose, useSwipeShuffle } from "@/components/use-swipe-shuffle";
 import { useCardDeck } from "@/components/use-card-deck";
 
 const DECK_LIFT = 10;
-const DECK_SCALE = 0.965;
+const DECK_SCALE = 0.96;
 const DECK_EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
 const REST_POSE: ReleasePose = { x: 0, rotation: 0, progress: 0 };
 
@@ -154,6 +154,7 @@ function TodayCard({
   // Single guarded commit per shuffle: re-armed whenever the count/day changes.
   const [commitGuard] = useState(createCommitGuard);
   const { shufflesUsed, date } = state.today;
+  const layers = deckLayerCount(shufflesUsed, MAX_SHUFFLES);
   useEffect(() => {
     commitGuard.reset();
   }, [commitGuard, shufflesUsed, date]);
@@ -216,8 +217,9 @@ function TodayCard({
         {
           transform: `translateY(${DECK_LIFT * (1 - p)}px) scale(${DECK_SCALE + (1 - DECK_SCALE) * p})`,
           opacity: String(0.55 + 0.45 * p),
+          transformOrigin: "50% 100%",
         },
-        { transform: "none", opacity: "1" },
+        { transform: "none", opacity: "1", transformOrigin: "50% 100%" },
       ],
       { duration: 260, easing: DECK_EASE },
     );
@@ -252,26 +254,24 @@ function TodayCard({
   return (
     <section className="mt-16">
       <div className="card-deck" ref={setDeck}>
-        <div aria-hidden className="card-ghost card-ghost-2" />
-        {nextMeal ? (
-          <article
+        {/* One back layer per swipe left. Keyed by absolute card index so a
+            commit keeps each element and only its --depth drops by one (the
+            CSS transition glides it up); the depth-0 element just unmounts. */}
+        {Array.from({ length: layers }, (_, i) => i + 1).map((depth) => (
+          <div
+            key={shufflesUsed + depth}
             aria-hidden
-            className="card-ghost card-ghost-1 flex flex-col overflow-hidden p-6 text-foreground"
+            data-testid="deck-layer"
+            className="card-ghost"
+            style={{ "--depth": depth } as React.CSSProperties}
           >
-            <div className="flex justify-end">
-              <span className="flex items-center gap-1.5 text-xs font-bold">
-                {swapIcon}
-                Shuffle
-              </span>
-            </div>
-            <div className="flex flex-1 flex-col justify-center">
-              <h2 className="text-[32px] font-bold leading-10">{nextMeal.name}</h2>
-              <p className="mt-4 text-xs leading-5 text-muted">{nextMeal.description}</p>
-            </div>
-          </article>
-        ) : (
-          <div aria-hidden className="card-ghost card-ghost-1" />
-        )}
+            {depth === 1 && nextMeal ? (
+              <div className="card-ghost-body flex h-full flex-col justify-center p-6">
+                <h2 className="text-[32px] font-bold leading-10">{nextMeal.name}</h2>
+              </div>
+            ) : null}
+          </div>
+        ))}
 
         {outgoing ? (
           <article
@@ -351,6 +351,9 @@ function TodayCard({
             {view === "kids" ? "Family suggestion" : "Kids suggestion"}
           </button>
         ) : null}
+        <span data-testid="swipes-left" className="ml-auto text-xs font-bold text-muted">
+          {swipesLeftLabel(layers)}
+        </span>
         {takeawaySkippedToday ? (
           <button
             type="button"

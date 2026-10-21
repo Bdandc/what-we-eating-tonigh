@@ -60,45 +60,57 @@ dialog::backdrop {
   background: rgba(2, 44, 25, 0.35);
 }
 
-/* Card deck. The suggestion sits on two ghost cards. A shuffle throws the top
-   card off in the direction of travel while the next one rises from the
-   ghost-1 position, so it reads as dealing rather than cross-fading. The ghost
-   offsets and the keyframes share --deck-lift / --deck-scale on purpose:
-   change them once and the whole motion stays consistent. */
+/* Card deck. One back layer per swipe left (0..3), each --depth steps down
+   and smaller, so edges peek out below the top card. Every layer sits at
+   depth - --drag: the swipe hook writes --drag (0..1) on the deck each frame,
+   so the whole stack rises one step in lockstep with the finger. Scaling is
+   from the bottom edge so the peek stays a full --deck-lift per layer. The
+   keyframes in today-screen.tsx share --deck-lift / --deck-scale. */
 
 :root {
   --deck-lift: 10px;
-  --deck-scale: 0.965;
+  --deck-scale: 0.96;
+  --deck-step: 0.04; /* 1 - --deck-scale */
   --deck-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* Reserve room for the deepest layer so the stack never shifts the layout. */
 .card-deck {
   position: relative;
+  padding-bottom: calc(var(--deck-lift) * 3);
 }
 
 .card-ghost {
+  --pos: calc(var(--depth, 1) - var(--drag, 0));
   position: absolute;
-  inset: 0;
+  inset: 0 0 calc(var(--deck-lift) * 3) 0;
+  z-index: calc(4 - var(--depth, 1));
   border-radius: 1rem;
   background: var(--surface);
-  box-shadow: 0 1px 2px rgba(2, 44, 25, 0.06);
+  box-shadow: 0 2px 6px rgba(2, 44, 25, 0.1);
+  transform-origin: 50% 100%;
+  transform: translateY(calc(var(--deck-lift) * var(--pos)))
+    scale(calc(1 - var(--deck-step) * var(--pos)));
+  transition: transform 200ms ease-out;
+  pointer-events: none;
 }
 
-/* The under-card rises toward the top slot in lockstep with the drag: the
-   swipe hook writes --drag (0..1) on the deck every frame. At rest it sits
-   lifted and dimmed; at full drag it occupies the top slot exactly. */
-.card-ghost-1 {
-  transform: translateY(calc(var(--deck-lift) * (1 - var(--drag, 0))))
-    scale(calc(var(--deck-scale) + (1 - var(--deck-scale)) * var(--drag, 0)));
-  opacity: calc(0.55 + 0.45 * var(--drag, 0));
-  transition:
-    transform 220ms var(--deck-ease),
-    opacity 220ms var(--deck-ease);
+/* Darker, calmer tint per depth: a deep-green wash whose opacity (not colour)
+   carries the depth, so only opacity/transform ever change. */
+.card-ghost::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--green-deep);
+  opacity: calc(0.07 * var(--pos));
+  pointer-events: none;
 }
 
-.card-ghost-2 {
-  transform: translateY(calc(var(--deck-lift) * 2)) scale(calc(var(--deck-scale) - 0.035));
-  opacity: 0.3;
+/* Next card: its title is only a blurred, faded hint so nothing is spoiled. */
+.card-ghost-body {
+  filter: blur(6px);
+  opacity: 0.4;
 }
 
 .card-live {
@@ -109,9 +121,14 @@ dialog::backdrop {
 /* During a drag the finger drives every transform directly; transitions
    would lag it. The class is removed on release so the same transitions
    ease everything home on a below-threshold snap-back. */
-.deck-dragging .card-live,
-.deck-dragging .card-ghost-1 {
+.deck-dragging .card-live {
   transition: none !important;
+}
+
+/* While the finger is down the stack tracks it directly; right after a
+   commit (deck-committed) deeper layers are exempt and glide up one step. */
+.deck-dragging:not(.deck-committed) .card-ghost {
+  transition: none;
 }
 
 .card-out {
@@ -160,5 +177,11 @@ dialog::backdrop {
 
   .card-out-right {
     animation: wawet-card-out-right 300ms cubic-bezier(0.3, 0.7, 0.4, 1) forwards;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-ghost {
+    transition: none;
   }
 }

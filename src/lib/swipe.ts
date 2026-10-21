@@ -61,3 +61,19 @@ export function createCommitGuard() {
     },
   };
 }
+
+/**
+ * Cards visible behind the top card = shuffles remaining (0..max), so the
+ * stack itself shows how many swipes are left. Tolerates bad input.
+ */
+export function deckLayerCount(used: number, max: number): number {
+  if (!Number.isFinite(used) || !Number.isFinite(max)) return 0;
+  return Math.max(0, Math.min(max, Math.floor(max - used)));
+}
+
+/** Short caption for the remaining swipes, matching the stack depth. */
+export function swipesLeftLabel(left: number): string {
+  if (left <= 0) return "No swipes left";
+  if (left === 1) return "Last pick";
+  return `${left} swipes left`;
+}
