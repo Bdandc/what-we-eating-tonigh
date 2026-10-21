@@ -41,3 +41,23 @@ export function dragProgress(dx: number): number {
 export function dragRotation(dx: number): number {
   return dragOffset(dx) * ROTATION_FACTOR;
 }
+
+/**
+ * One commit per shuffle count. A swipe release, a stale closure or a second
+ * handler can all call the commit path before React has re-rendered with the
+ * new count; the guard lets only the first call for a given `used` value
+ * through, and never past `max`. Call reset() whenever the count changes.
+ */
+export function createCommitGuard() {
+  let committedAt = -1;
+  return {
+    tryCommit(used: number, max: number): boolean {
+      if (used >= max || committedAt === used) return false;
+      committedAt = used;
+      return true;
+    },
+    reset() {
+      committedAt = -1;
+    },
+  };
+}

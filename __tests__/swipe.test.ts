@@ -8,9 +8,11 @@ import {
   SWIPE_THRESHOLD,
   dragOffset,
   dragProgress,
+  createCommitGuard,
   dragRotation,
   evaluateSwipe,
 } from "@/lib/swipe";
+import { MAX_SHUFFLES, canShuffle, loadState, shuffle } from "@/lib/wawet-state";
 
 describe("evaluateSwipe", () => {
   it("triggers exactly at the raw-dx threshold boundary", () => {
@@ -79,5 +81,45 @@ describe("constants stay coherent", () => {
     expect(SWIPE_THRESHOLD).toBeLessThanOrEqual(FOLLOW_LIMIT);
     expect(AXIS_DOMINANCE).toBeGreaterThan(1);
     expect(PROMOTE_DISTANCE).toBeGreaterThanOrEqual(SWIPE_THRESHOLD);
+  });
+});
+
+describe("commit guard", () => {
+  it("lets only the first commit per count through (no double-commit)", () => {
+    const guard = createCommitGuard();
+    expect(guard.tryCommit(0, MAX_SHUFFLES)).toBe(true);
+    expect(guard.tryCommit(0, MAX_SHUFFLES)).toBe(false);
+    guard.reset();
+    expect(guard.tryCommit(1, MAX_SHUFFLES)).toBe(true);
+    expect(guard.tryCommit(1, MAX_SHUFFLES)).toBe(false);
+  });
+
+  it("never commits at or past the cap", () => {
+    const guard = createCommitGuard();
+    expect(guard.tryCommit(MAX_SHUFFLES, MAX_SHUFFLES)).toBe(false);
+    expect(guard.tryCommit(MAX_SHUFFLES + 1, MAX_SHUFFLES)).toBe(false);
+  });
+});
+
+describe("swipe count", () => {
+  it("allows exactly 3 shuffles and no phantom 4th", () => {
+    expect(MAX_SHUFFLES).toBe(3);
+    const guard = createCommitGuard();
+    let state = loadState();
+    let commits = 0;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      // Each attempt fires twice before "re-render" (double-commit scenario).
+      for (let call = 0; call < 2; call++) {
+        if (canShuffle(state) && guard.tryCommit(state.today.shufflesUsed, MAX_SHUFFLES)) {
+          state = shuffle(state);
+          commits++;
+        }
+      }
+      guard.reset();
+    }
+    expect(commits).toBe(3);
+    expect(state.today.shufflesUsed).toBe(3);
+    expect(canShuffle(state)).toBe(false);
+    expect(shuffle(state)).toBe(state);
   });
 });

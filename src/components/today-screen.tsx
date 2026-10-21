@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   MAX_SHUFFLES,
@@ -15,6 +15,7 @@ import {
   skipTakeaway,
   weekdayName,
 } from "@/lib/wawet-state";
+import { createCommitGuard } from "@/lib/swipe";
 import { useWawet } from "@/components/use-wawet";
 import { type ReleasePose, useSwipeShuffle } from "@/components/use-swipe-shuffle";
 import { useCardDeck } from "@/components/use-card-deck";
@@ -150,6 +151,13 @@ function TodayCard({
 
   const wobbleAnimation = useRef<Animation | null>(null);
 
+  // Single guarded commit per shuffle: re-armed whenever the count/day changes.
+  const [commitGuard] = useState(createCommitGuard);
+  const { shufflesUsed, date } = state.today;
+  useEffect(() => {
+    commitGuard.reset();
+  }, [commitGuard, shufflesUsed, date]);
+
   // Cancel a running wobble if the card leaves the screen mid-shake.
   useEffect(() => {
     return () => {
@@ -193,6 +201,7 @@ function TodayCard({
 
   /** Throw the top card from wherever it was released and promote the riser. */
   function doShuffle(direction: "left" | "right", release: ReleasePose) {
+    if (!commitGuard.tryCommit(state.today.shufflesUsed, MAX_SHUFFLES)) return;
     throwCard(meal, direction, release);
     setState((s) => (s ? shuffle(s) : s));
     // The stable card element rises from the under-card's CURRENT pose into

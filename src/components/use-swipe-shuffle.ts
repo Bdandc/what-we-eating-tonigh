@@ -50,7 +50,7 @@ export function useSwipeShuffle(
   const suppressClick = useRef(false);
   const suppressTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const resetVisual = useCallback(() => {
+  const resetVisual = useCallback((committed = false) => {
     const g = gesture.current;
     if (g?.raf) cancelAnimationFrame(g.raf);
     const el = cardRef.current;
@@ -64,18 +64,27 @@ export function useSwipeShuffle(
     }
     const deck = deckRef.current;
     if (deck) {
-      deck.classList.remove("deck-dragging");
       deck.style.setProperty("--drag", "0");
+      if (committed) {
+        // A committed swipe swaps the cards at once; keep transitions off for
+        // two frames so the under-card snaps to rest instead of easing down
+        // from mid-drag (the visible jitter), then hand back to CSS.
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => deck.classList.remove("deck-dragging")),
+        );
+      } else {
+        deck.classList.remove("deck-dragging");
+      }
     }
   }, []);
 
   const endGesture = useCallback(
-    (event: React.PointerEvent) => {
+    (event: React.PointerEvent, committed = false) => {
       const el = cardRef.current;
       if (el && el.hasPointerCapture(event.pointerId)) {
         el.releasePointerCapture(event.pointerId);
       }
-      resetVisual();
+      resetVisual(committed);
       gesture.current = null;
     },
     [resetVisual],
@@ -99,6 +108,9 @@ export function useSwipeShuffle(
       raf: 0,
     };
     el.setPointerCapture(event.pointerId);
+    // A running entry/wobble animation overrides inline transforms, so the
+    // card would ignore the finger until it ended ("won't swipe, then does").
+    for (const animation of el.getAnimations()) animation.cancel();
     // The drag drives transforms directly per frame; transitions would lag it.
     deckRef.current?.classList.add("deck-dragging");
     el.style.userSelect = "none";
@@ -143,8 +155,9 @@ export function useSwipeShuffle(
           suppressClick.current = false;
         }, 300);
       }
-      endGesture(event);
-      if (enabled && evaluateSwipe(dx, dy) === "shuffle") {
+      const commit = enabled && evaluateSwipe(dx, dy) === "shuffle";
+      endGesture(event, commit);
+      if (commit) {
         onShuffle(dx < 0 ? "left" : "right", {
           x: dragOffset(dx),
           rotation: dragRotation(dx),
