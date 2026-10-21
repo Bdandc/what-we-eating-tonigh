@@ -18,6 +18,12 @@ export type TodayState = {
   suggestionId: string;
   kidsSuggestionId: string;
   shufflesUsed: number;
+  /** Every card dealt today per view (chronological). Optional: states saved
+   * before this field existed fall back to just the current card. */
+  dealt?: RecentSuggestions;
+  /** How many times the shuffles were reset today; part of the shuffle seed so
+   * a reset deals a different sequence. Optional for old saved states. */
+  resetCount?: number;
   view: MealKind;
   takeawaySkipped: boolean;
 };
@@ -64,6 +70,8 @@ export type WawetState = {
 export const STORAGE_KEY = "wawet-state-v1";
 export const LEGACY_STORAGE_KEY = "dinner-time-next-state-v3";
 export const MAX_SHUFFLES = 3;
+/** Ids remembered across days: every card dealt over the last two days. */
+export const RECENT_CAP = 2 * (MAX_SHUFFLES + 1);
 export const RECENT_SUGGESTION_DAYS = 3;
 export const MAX_CUSTOM_INGREDIENTS = 200;
 export const MAX_INGREDIENT_NAME_LENGTH = 60;
@@ -104,7 +112,19 @@ function fnv1a(input: string): number {
     hash ^= input.charCodeAt(i);
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
-  return hash >>> 0;
+  return fmix32(hash);
+}
+
+/** murmur3 finaliser. FNV-1a's low bits only depend on the low bits of the
+ * input, so `% even-pool` alternated parity day to day without this. */
+function fmix32(input: number): number {
+  let h = input >>> 0;
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return h >>> 0;
 }
 
 export function pick(poolIds: string[], seed: string): string {
@@ -182,8 +202,22 @@ function dailyPick(
 }
 
 /** Prepend today's dealt id to the recent list, most recent first, capped. */
-function pushRecent(list: string[], id: string): string[] {
-  return [id, ...list.filter((x) => x !== id)].slice(0, RECENT_SUGGESTION_DAYS);
+function pushRecent(list: string[], dealt: string[]): string[] {
+  const latestFirst = [...dealt].reverse();
+  const merged = [...latestFirst, ...list.filter((x) => !latestFirst.includes(x))];
+  return merged.slice(0, RECENT_CAP);
+}
+
+/** Cards dealt today for a view, always including the card currently shown. */
+function dealtToday(today: TodayState, kind: MealKind): string[] {
+  const current = kind === "family" ? today.suggestionId : today.kidsSuggestionId;
+  const list = today.dealt?.[kind] ?? [];
+  return list.includes(current) ? list : [...list, current];
+}
+
+/** Shuffle seed suffix: empty until the first reset so seeds stay stable. */
+function resetSuffix(today: TodayState): string {
+  return today.resetCount ? `:r${today.resetCount}` : "";
 }
 
 /** mealById lookup that cannot be fooled by Object.prototype keys: untrusted
@@ -222,16 +256,20 @@ function varietyPick(
   recent: string[],
   date: string,
   hidden: string[] = [],
+  yesterdayDealt: string[] = recent.slice(0, 1),
 ): string {
   const eligible = eligibleIds(kind, pantry, customMeals, hidden);
   const full = fullIds(kind, customMeals, hidden);
   const recentSet = new Set(recent);
+  const dealtSet = new Set(yesterdayDealt);
   const yesterday = recent[0];
   const pool =
     [
       eligible.filter((id) => !recentSet.has(id)),
+      eligible.filter((id) => !dealtSet.has(id)),
       eligible.filter((id) => id !== yesterday),
       full.filter((id) => !recentSet.has(id)),
+      full.filter((id) => !dealtSet.has(id)),
       full.filter((id) => id !== yesterday),
     ].find((p) => p.length > 0) ?? (eligible.length > 0 ? eligible : full);
   return pick(pool, `${date}:${kind}:0`);
@@ -259,13 +297,16 @@ function defaultPantry(customIngredients: CustomIngredient[] = []): Record<strin
 export function freshState(now: Date = new Date()): WawetState {
   const date = todayLocalDate(now);
   const pantry = defaultPantry();
+  const suggestionId = dailyPick("family", pantry, [], date, 0);
+  const kidsSuggestionId = dailyPick("kids", pantry, [], date, 0);
   return {
     version: 1,
     today: {
       date,
-      suggestionId: dailyPick("family", pantry, [], date, 0),
-      kidsSuggestionId: dailyPick("kids", pantry, [], date, 0),
+      suggestionId,
+      kidsSuggestionId,
       shufflesUsed: 0,
+      dealt: { family: [suggestionId], kids: [kidsSuggestionId] },
       view: "family",
       takeawaySkipped: false,
     },
@@ -429,7 +470,7 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
     for (const id of value) {
       if (typeof id !== "string" || !known.has(id) || out.includes(id)) continue;
       out.push(id);
-      if (out.length >= RECENT_SUGGESTION_DAYS) break;
+      if (out.length >= RECENT_CAP) break;
     }
     return out;
   };
@@ -445,6 +486,10 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
   const shufflesUsed =
     typeof rawToday.shufflesUsed === "number" && Number.isFinite(rawToday.shufflesUsed)
       ? Math.min(MAX_SHUFFLES, Math.max(0, Math.floor(rawToday.shufflesUsed)))
+      : 0;
+  const resetCount =
+    typeof rawToday.resetCount === "number" && Number.isFinite(rawToday.resetCount)
+      ? Math.min(1_000_000, Math.max(0, Math.floor(rawToday.resetCount)))
       : 0;
   const view: MealKind =
     rawToday.view === "kids" && kidsEnabled ? "kids" : "family";
@@ -464,13 +509,37 @@ export function parseState(raw: string | null, now: Date = new Date()): WawetSta
     );
   };
 
+  const suggestionId = repair("family", rawToday.suggestionId);
+  const kidsSuggestionId = repair("kids", rawToday.kidsSuggestionId);
+  // Dealt-today history: known ids only, deduped, capped; the current card is
+  // always part of it. Missing (old saves) or malformed data costs nothing.
+  const rawDealt = isRecord(rawToday.dealt) ? rawToday.dealt : {};
+  const readDealt = (kind: MealKind, current: string): string[] => {
+    const value = rawDealt[kind];
+    const known = new Set(fullIds(kind, customMeals));
+    const out: string[] = [];
+    if (Array.isArray(value)) {
+      for (const id of value) {
+        if (typeof id !== "string" || !known.has(id) || out.includes(id)) continue;
+        out.push(id);
+        if (out.length >= MAX_SHUFFLES + 1) break;
+      }
+    }
+    return out.includes(current) ? out : [...out.slice(-MAX_SHUFFLES), current];
+  };
+
   const state: WawetState = {
     version: 1,
     today: {
       date,
-      suggestionId: repair("family", rawToday.suggestionId),
-      kidsSuggestionId: repair("kids", rawToday.kidsSuggestionId),
+      suggestionId,
+      kidsSuggestionId,
       shufflesUsed,
+      dealt: {
+        family: readDealt("family", suggestionId),
+        kids: readDealt("kids", kidsSuggestionId),
+      },
+      ...(resetCount > 0 ? { resetCount } : {}),
       view,
       takeawaySkipped,
     },
@@ -495,18 +564,23 @@ export function rolloverIfNeeded(state: WawetState, now: Date = new Date()): Waw
   if (state.today.date === date) return state;
   // Yesterday's cards join the recent list so the new day never re-deals them
   // while an alternative exists (see varietyPick).
+  const yFamily = dealtToday(state.today, "family");
+  const yKids = dealtToday(state.today, "kids");
   const recent: RecentSuggestions = {
-    family: pushRecent(state.recent.family, state.today.suggestionId),
-    kids: pushRecent(state.recent.kids, state.today.kidsSuggestionId),
+    family: pushRecent(state.recent.family, yFamily),
+    kids: pushRecent(state.recent.kids, yKids),
   };
+  const familyId = varietyPick("family", state.pantry, state.customMeals, recent.family, date, state.hiddenSeededMeals, yFamily);
+  const kidsId = varietyPick("kids", state.pantry, state.customMeals, recent.kids, date, state.hiddenSeededMeals, yKids);
   return {
     ...state,
     recent,
     today: {
       date,
-      suggestionId: varietyPick("family", state.pantry, state.customMeals, recent.family, date, state.hiddenSeededMeals),
-      kidsSuggestionId: varietyPick("kids", state.pantry, state.customMeals, recent.kids, date, state.hiddenSeededMeals),
+      suggestionId: familyId,
+      kidsSuggestionId: kidsId,
       shufflesUsed: 0,
+      dealt: { family: [familyId], kids: [kidsId] },
       view: state.settings.kidsEnabled ? state.today.view : "family",
       takeawaySkipped: false,
     },
@@ -538,15 +612,21 @@ function nextShuffleId(state: WawetState): string | null {
   const { view, date } = state.today;
   const n = state.today.shufflesUsed + 1;
   const current = view === "family" ? state.today.suggestionId : state.today.kidsSuggestionId;
-  // Deal from the pantry-matched pool first; when that leaves nothing to deal
-  // (eligible is empty OR exactly the current card), extend to the full pool
-  // so the deck never goes dead mid-day.
-  let pool = eligibleIds(view, state.pantry, state.customMeals, state.hiddenSeededMeals)
-    .filter((id) => id !== current);
-  if (pool.length === 0) {
-    pool = fullIds(view, state.customMeals, state.hiddenSeededMeals).filter((id) => id !== current);
-  }
-  return pick(pool, `${date}:${view}:${n}`);
+  // Never re-deal a card already dealt today while an alternative exists.
+  // Preference order: pantry-matched and undealt, any undealt, pantry-matched
+  // but already dealt, anything but the current card. Only the last step can
+  // repeat an earlier card, and it never returns the current one.
+  const dealt = new Set(dealtToday(state.today, view));
+  const eligible = eligibleIds(view, state.pantry, state.customMeals, state.hiddenSeededMeals);
+  const full = fullIds(view, state.customMeals, state.hiddenSeededMeals);
+  const pool = [
+    eligible.filter((id) => !dealt.has(id)),
+    full.filter((id) => !dealt.has(id)),
+    eligible.filter((id) => id !== current),
+    full.filter((id) => id !== current),
+  ].find((p) => p.length > 0);
+  if (!pool) return null;
+  return pick(pool, `${date}:${view}:${n}${resetSuffix(state.today)}`);
 }
 
 export function peekNextSuggestion(state: WawetState) {
@@ -559,11 +639,16 @@ export function shuffle(state: WawetState): WawetState {
   if (next === null) return state;
   const { view } = state.today;
   const n = state.today.shufflesUsed + 1;
+  const dealt = dealtToday(state.today, view);
   return {
     ...state,
     today: {
       ...state.today,
       shufflesUsed: n,
+      dealt: {
+        family: view === "family" ? [...dealt, next] : dealtToday(state.today, "family"),
+        kids: view === "kids" ? [...dealt, next] : dealtToday(state.today, "kids"),
+      },
       ...(view === "family" ? { suggestionId: next } : { kidsSuggestionId: next }),
     },
   };
@@ -871,7 +956,16 @@ export function setKidsEnabled(state: WawetState, enabled: boolean): WawetState 
 }
 
 export function resetShuffles(state: WawetState): WawetState {
-  return { ...state, today: { ...state.today, shufflesUsed: 0 } };
+  // Bump the reset epoch so the replayed shuffles deal a fresh sequence; the
+  // dealt-today history stays so reset cards are still not repeats.
+  return {
+    ...state,
+    today: {
+      ...state.today,
+      shufflesUsed: 0,
+      resetCount: (state.today.resetCount ?? 0) + 1,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

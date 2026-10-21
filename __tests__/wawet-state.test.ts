@@ -12,7 +12,7 @@ import {
   MAX_CUSTOM_INGREDIENTS,
   MAX_CUSTOM_MEALS,
   MAX_SHUFFLES,
-  RECENT_SUGGESTION_DAYS,
+  RECENT_CAP,
   STORAGE_KEY,
   type WawetState,
   addCustomIngredient,
@@ -496,14 +496,15 @@ describe("daily variety at rollover", () => {
 
   it("avoids everything in the recent window while the pool allows it", () => {
     let s = freshState(new Date(2026, 0, 1, 12));
+    // Tick everything so the eligible pool (45 meals) dwarfs the recent window.
+    s = applyPantryOverrides(
+      s,
+      Object.fromEntries(Object.keys(s.pantry).map((id) => [id, true])),
+    );
     for (let day = 2; day <= 60; day++) {
       const before = [s.today.suggestionId, ...s.recent.family];
       s = rolloverIfNeeded(s, new Date(2026, 0, day, 12));
-      // Default pantry has 5 eligible family meals, so the recent window
-      // (3) can always be dodged without leaving the eligible pool.
-      expect(before.slice(0, RECENT_SUGGESTION_DAYS)).not.toContain(
-        s.today.suggestionId,
-      );
+      expect(before.slice(0, RECENT_CAP)).not.toContain(s.today.suggestionId);
     }
   });
 
@@ -546,12 +547,18 @@ describe("daily variety at rollover", () => {
 
   it("caps the recent list and round-trips it through parseState", () => {
     let s = freshState(new Date(2026, 0, 1, 12));
+    s = applyPantryOverrides(
+      s,
+      Object.fromEntries(Object.keys(s.pantry).map((id) => [id, true])),
+    );
     for (let day = 2; day <= 8; day++) {
       s = rolloverIfNeeded(s, new Date(2026, 0, day, 12));
+      for (let i = 0; i < MAX_SHUFFLES; i++) s = shuffle(s);
     }
-    expect(s.recent.family).toHaveLength(RECENT_SUGGESTION_DAYS);
-    expect(s.recent.kids).toHaveLength(RECENT_SUGGESTION_DAYS);
-    const parsed = parseState(JSON.stringify(s), new Date(2026, 0, 8, 12));
+    s = rolloverIfNeeded(s, new Date(2026, 0, 9, 12));
+    expect(s.recent.family).toHaveLength(RECENT_CAP);
+    expect(s.recent.kids.length).toBeLessThanOrEqual(RECENT_CAP);
+    const parsed = parseState(JSON.stringify(s), new Date(2026, 0, 9, 12));
     expect(parsed.recent).toEqual(s.recent);
   });
 
@@ -1012,7 +1019,7 @@ describe("custom meals", () => {
   });
 
   it("rejects name collisions with seeded and custom meals, case-insensitively", () => {
-    expect(addCustomMeal(base, { name: "lasagna", kind: "family", ingredients: [] }).ok).toBe(false);
+    expect(addCustomMeal(base, { name: "lasagne", kind: "family", ingredients: [] }).ok).toBe(false);
     const s = withMeal();
     expect(addCustomMeal(s, { name: "SHOPSKA SALAD", kind: "kids", ingredients: [] }).ok).toBe(false);
   });
@@ -1051,7 +1058,7 @@ describe("custom meals", () => {
 
   it("resolveMeal finds seeded and custom meals", () => {
     const s = withMeal();
-    expect(resolveMeal(s, "lasagna-night")?.name).toBe("Lasagna");
+    expect(resolveMeal(s, "lasagna-night")?.name).toBe("Lasagne");
     expect(resolveMeal(s, byName(s, "Shopska Salad").id)?.name).toBe("Shopska Salad");
     expect(resolveMeal(s, "nope")).toBeNull();
   });
@@ -1063,7 +1070,7 @@ describe("custom meals", () => {
       customMeals: [
         ...s.customMeals,
         { id: "m-tampered", name: "Bad id", kind: "family", description: "", ingredients: [] },
-        { id: generateMealId(), name: "Lasagna", kind: "family", description: "", ingredients: [] },
+        { id: generateMealId(), name: "Lasagne", kind: "family", description: "", ingredients: [] },
         { id: generateMealId(), name: "Bad kind", kind: "brunch", description: "", ingredients: [] },
         { id: generateMealId(), name: "Pruned", kind: "family", description: "", ingredients: ["ghost-item"] },
       ],
@@ -1073,7 +1080,7 @@ describe("custom meals", () => {
     expect(names).toContain("Keeper");
     expect(names).toContain("Pruned");
     expect(names).not.toContain("Bad id");
-    expect(names).not.toContain("Lasagna");
+    expect(names).not.toContain("Lasagne");
     expect(names).not.toContain("Bad kind");
     expect(back.customMeals.find((m) => m.name === "Pruned")?.ingredients).toEqual([]);
   });
@@ -1087,7 +1094,7 @@ describe("custom meals", () => {
     expect(byName(kept.state, "Shopska Salad").description).toBe("New words");
     expect(byName(kept.state, "Shopska Salad").ingredients).toEqual(["tomato", "cucumber"]);
 
-    const renamedToSeeded = updateCustomMeal(s, id, { name: "Lasagna", kind: "family", ingredients: [] });
+    const renamedToSeeded = updateCustomMeal(s, id, { name: "Lasagne", kind: "family", ingredients: [] });
     expect(renamedToSeeded.ok).toBe(false);
     expect(updateCustomMeal(s, "m-missing", { name: "X", kind: "family", ingredients: [] }).ok).toBe(false);
   });
